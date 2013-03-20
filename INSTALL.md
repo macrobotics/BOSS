@@ -1,4 +1,22 @@
 # INSTALL.md
+## Arduino
+First update Apt:
+
+	sudo apt-get update && sudo apt-get upgrade
+
+Then install Arduino:
+
+	sudo apt-get install arduino
+	
+## Python
+First update Apt:
+
+	sudo apt-get update && sudo apt-get upgrade
+
+Then install python and libraries:
+
+	sudo apt-get install python
+
 ## OpenCV
 ### Dependencies
 First install this first set of dependecies:
@@ -24,6 +42,9 @@ Then get the source and build from source:
 	wget http://sourceforge.net/projects/opencvlibrary/files/opencv-unix/2.4.3/OpenCV-2.4.3.tar.bz2
 	tar -xvjpf OpenCV-2.4.3.tar.bz2
 	cd OpenCV-2.4.3/ && mkdir build && cd build
+	
+Now you can build the source (warning, will take a LONG TIME on the RaspberryPi)
+
 	cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local -D BUILD_PYTHON_SUPPORT=ON -D BUILD_EXAMPLES=ON ..
 	make
 	sudo make install

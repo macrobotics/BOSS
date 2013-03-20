@@ -1,17 +1,17 @@
+## /etc/network/interfaces
+## Author: Trevor Stanhope
+## Script file for system interface definitions used by RPi slaves
+## Local
 auto lo
-
 iface lo inet loopback
 iface eth0 inet dhcp
 
+## Ad-hoc
 auto wlan0
 allow-hotplug wlan0
-#iface wlan0 inet manual
-#wpa-roam /etc/wpa_supplicant/wpa_supplicant.conf
-#iface default inet dhcp
-
 iface wlan0 inet static
-address 10.42.0.2
-gateway 10.42.0.1
+address 10.42.0.2 # IP for device, slave1 = 10.42.0.2
+gateway 10.42.0.1 # master = 10.42.0.1
 netmask 255.255.255.0
-wireless-essid test
+wireless-essid boss # ESSID of ad-hoc network
 wireless-mode managed
