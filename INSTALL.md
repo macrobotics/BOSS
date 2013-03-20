@@ -15,7 +15,7 @@ First update Apt:
 
 Then install python and libraries:
 
-	sudo apt-get install python
+	sudo apt-get install python python-simplejson
 
 ## OpenCV
 ### Dependencies
@@ -66,4 +66,3 @@ Add the following lines:
 
 	PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/lib/pkgconfig
 	export PKG_CONFIG_PATH
-
