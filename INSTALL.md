@@ -1,5 +1,17 @@
-# INSTALL.md
-## Arduino
+# Bale Ordinal Sorting System (BOSS) INSTALL.md
+## Master (Laptop)
+### Python and GTK
+The display for the Master is rendered using python and gtk2. First it
+#is important to update Apt:
+
+	sudo apt-get update && sudo apt-get upgrade
+	
+Then install python and the GTK libraries:
+
+	sudo apt-get install python python-simplejson python-gtk2
+	
+## Slaves (RaspberryPi)
+### Arduino
 First update Apt:
 
 	sudo apt-get update && sudo apt-get upgrade
@@ -8,7 +20,7 @@ Then install Arduino:
 
 	sudo apt-get install arduino
 	
-## Python
+### Python
 First update Apt:
 
 	sudo apt-get update && sudo apt-get upgrade
@@ -17,8 +29,7 @@ Then install python and libraries:
 
 	sudo apt-get install python python-simplejson
 
-## OpenCV
-### Dependencies
+### OpenCV
 First install this first set of dependecies:
 
 	sudo apt-get -y install build-essential cmake cmake-qt-gui
@@ -36,7 +47,6 @@ Then install this second set of dependencies:
 	libdc1394-utils swig libv4l-0 libv4l-dev python-numpy libpython2.6
 	python-dev python2.6-dev libgtk2.0-dev pkg-config
 
-### Build Source
 Then get the source and build from source:
 
 	wget http://sourceforge.net/projects/opencvlibrary/files/opencv-unix/2.4.3/OpenCV-2.4.3.tar.bz2
@@ -49,7 +59,6 @@ Now you can build the source (warning, will take a LONG TIME on the RaspberryPi)
 	make
 	sudo make install
 
-### Configuration
 Open the OpenCV configuration file:
 
 	sudo nano /etc/ld.so.conf.d/opencv.conf
