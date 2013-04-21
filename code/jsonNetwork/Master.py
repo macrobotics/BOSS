@@ -21,7 +21,7 @@ socket_out.bind((ADDR_OUT)) # bind socket to address with new tuple
 socket_out.listen(5) # maximum number of queued connections
 
 while 1:
-	# SEND
+    # SEND
     print 'listening...'
     conn,addr = socket_out.accept() # accept the connection
     print '...connected!'
