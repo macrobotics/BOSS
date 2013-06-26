@@ -1,7 +1,7 @@
-## /etc/network/interfaces
-## Author: Trevor Stanhope
-## Script file for host definitions used by botnet
-## Local
+# /etc/network/interfaces
+# Script file for host definitions used by botnet
+
+# Local
 127.0.0.1	localhost
 ::1		localhost ip6-localhost ip6-loopback
 fe00::0		ip6-localnet
@@ -10,8 +10,8 @@ ff02::1		ip6-allnodes
 ff02::2		ip6-allrouters
 127.0.1.1	raspberrypi
 
-## Ad-hoc
+# Ad-hoc
 10.42.0.1	master
-10.42.0.2	slave1
-10.42.0.3	slave2
-10.42.0.4	slave3
+10.42.0.2	blue
+10.42.0.3	green
+10.42.0.4	red
