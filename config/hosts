@@ -1,4 +1,4 @@
-# /etc/network/interfaces
+# /etc/hosts
 # Script file for host definitions used by botnet
 
 # Local
@@ -8,7 +8,9 @@ fe00::0		ip6-localnet
 ff00::0		ip6-mcastprefix
 ff02::1		ip6-allnodes
 ff02::2		ip6-allrouters
-127.0.1.1	raspberrypi
+
+# Change the following to the local host name
+127.0.1.1	TBD
 
 # Ad-hoc
 10.42.0.1	master

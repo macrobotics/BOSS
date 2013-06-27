@@ -60,6 +60,7 @@ while (x < WIDTH-1):
   else:
     x += 1
 
+print('UNCONSOLIDATED')
 print('xstarts' + str(xstarts))
 print('xends' + str(xends))    
 for i in xrange(1,(len(xsizes)-2)):
@@ -71,7 +72,8 @@ for i in xrange(1,(len(xsizes)-2)):
     xsizes[i] += size + MINIMUM
     xends[i] += size + MINIMUM
     xoffsets[i] += (xstarts[i] + (xends[i] - xstarts[i])/2)
-    
+
+print('CONSOLIDATED')
 print('xstarts' + str(xstarts))
 print('xends' + str(xends))
 # Display Image and Information
@@ -102,3 +104,8 @@ raw.save("RAW.jpg", "JPEG")
 p = subprocess.Popen(["display", "RAW.jpg"])
 time.sleep(5)
 p.kill()
+
+# Log
+with open('columns.csv', 'w') as log:
+  for item in columns:
+    log.write("%s\n" % str(item))
