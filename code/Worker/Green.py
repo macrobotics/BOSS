@@ -1,7 +1,7 @@
 # GREEN.py
 # License: Creative Commons 2013, Trevor Stanhope
 
-# Setup
+# Imports
 from numpy import * # image processing
 import numpy
 from PIL import Image # image processing
@@ -12,6 +12,8 @@ import serial
 from serial import SerialException
 import socket
 import sys
+
+# Setup
 BAUD = 9600
 DEVICE = '/dev/ttyACM1'
 CAMERA_INDEX = 1

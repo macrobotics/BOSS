@@ -1,4 +1,4 @@
-# Bale Ordinal Sorting System (BOSS) INSTALL.md
+# Bale Ordinal Sorting System (BOSS)
 ## Master (Laptop)
 ### Python and GTK
 The display for the Master is rendered using python and gtk2. First it
