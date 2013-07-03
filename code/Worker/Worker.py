@@ -142,7 +142,6 @@ class BOSS_Worker:
       print('Receiving COMMAND...')
       json_command = self.socket_in.recv(BUFFER_SIZE)
       dict_command = json.loads(json_command)
-      print(str(dict_command))
       self.command = dict_command['COMMAND']
       print('...Success.')
     except socket.error as SocketError:
@@ -157,7 +156,7 @@ class BOSS_Worker:
     except Exception:
       print("...Failure.")
 
-  def execute_action(self):
+  def decide_action(self):
     print(self.command)
     if (self.command == 'START'):
       self.action = 'START'
@@ -175,10 +174,14 @@ class BOSS_Worker:
     else:
       self.action = 'UNKNOWN'
 
+  def control_arduino(self):
     try:
       self.arduino.write(self.action)
       self.status = self.arduino.readline()
-      self.response = 'OKAY'
+      if (self.status == 0)
+        self.response = 'OKAY'
+      else:
+        self.response = 'BAD'
     except ValueError:
       print("ValueError: Failed to parse signal, retrying...")
     except OSError:
@@ -197,7 +200,7 @@ if __name__ == "__main__":
     while (Worker.connected_in) or (Worker.connected_out):
       #Worker.use_camera()
       Worker.receive_command()
-      Worker.execute_action()
+      Worker.decide_action()
       Worker.send_response()
     else:
       Worker.disconnect()

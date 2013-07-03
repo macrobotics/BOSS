@@ -10,42 +10,50 @@
 #include "stdio.h"
 #include "Servo.h"
 #define BAUD 9600
+#define RIGHT_SERVO_PIN 10
+#define LEFT_SERVO_PIN 9
+#define FORWARD 'F'
+#define BACKWARD 'B'
+#define LEFT 'L'
+#define RIGHT 'R'
+#define GRAB 'G'
+#define STACK 'S'
 
-/* --- Declarations --- */
-char COMMAND;
-boolean RESPONSE;
-Servo leftServo;
-Servo rightServo;
+/* --- Declarations right_servo--- */
+char command;
+boolean respose;
+Servo left_servo;
+Servo right_servo;
 
 /* --- Setup --- */
 void setup() {
-  leftServo.attach(9);
-  rightServo.attach(10);
+  left_servo.attach(LEFT_SERVO_PIN);
+  right_servo.attach(RIGHT_SERVO_PIN);
   Serial.begin(BAUD);
 }
 
 /* --- Loop --- */
 void loop() {
-  COMMAND = Serial.read();
+  command = Serial.read();
   delay(1000);
-  switch(COMMAND) {
-    case '1':
-      RESPONSE = forward();
-    case '2':
-      RESPONSE = backward();
-    case 'l':
-      RESPONSE = left();
-    case 'r':
-      RESPONSE = right();
-    case 'g':
-      RESPONSE = grab();
-    case 's':
-      RESPONSE = stack();
+  switch(command) {
+    case FORWARD:
+      respose = forward();
+    case BACKWARD:
+      respose = backward();
+    case LEFT:
+      respose = left();
+    case RIGHT:
+      respose = right();
+    case GRAB:
+      respose = grab();
+    case STACK:
+      respose = stack();
     default:
       break;
   }
   Serial.flush();
-  Serial.println(RESPONSE);
+  Serial.println(respose);
 }
 
 /* --- Forward --- */
