@@ -18,46 +18,46 @@ QUEUE_MAX = 5
 
 class BOSS_Server:
   def run(self, widget, checkbox, window):
-    if (self.started == False):
+    if (checkbox.get_active()):
       self.send_command('START')
       self.receive_response()
-      self.started = True
-    else:
-      while gtk.events_pending():
-        gtk.main_iteration_do(False)
-
-    while (checkbox.get_active()):
-      self.send_command('SOMETHING')
-      self.receive_response()
-      while gtk.events_pending():
-        gtk.main_iteration_do(False)
+      while (checkbox.get_active()):
+        self.send_command('CONTINUE')
+        self.receive_response()
+        while gtk.events_pending():
+          gtk.main_iteration_do(False)
+      else:
+        self.send_command('PAUSE')
+        self.receive_response()
     else:
       self.send_command('STOP')
       self.receive_response()
-      self.started = False
       while gtk.events_pending():
         gtk.main_iteration_do(False)
   
   def receive_response(self):
     try:
       print("Receiving RESPONSE...")
-      response = self.green_socket_in.recv(BUFFER_SIZE)
-      parsed_response = json.loads(response)
-      status = parsed_response['STATUS']
+      json_response = self.green_socket_in.recv(BUFFER_SIZE)
+      parsed_response = json.loads(json_response)
+      response = parsed_response['RESPONSE']
       print("...Success.")
-      return status
-    except Exception:
-      print('...Failure.')
+    except socket.error as Error:
+      print('...Socket Failure.')
+    except ValueError:
+      print('...JSON Failure.')
 
-  def send_command(self, action):
+  def send_command(self, command):
     try:
       print("Sending COMMAND...")
-      command = json.dumps({'ACTION':action})
-      self.green_connection.send(command)
-      self.action_green.set_text(action)
+      json_command = json.dumps({'COMMAND':command})
+      self.green_connection.send(json_command)
+      self.action_green.set_text(command)
       print("...Success.")
-    except Exception:
-      print('...Failure.')
+    except socket.error as Error:
+      print('...Socket Failure.')
+    except ValueError:
+      print('...JSON Failure.')
       
   def close(self, widget, window):
     try:
@@ -75,6 +75,8 @@ class BOSS_Server:
       self.green_socket_in.close()
       self.green_socket_out.close()
       self.green_connection.close()
+      self.green_connected_in = False
+      self.green_connected_out = False
       print("...Success.")
     except AttributeError:
       print('...Nothing to Disconnect.')
@@ -83,28 +85,35 @@ class BOSS_Server:
     self.status_blue.set_text('DISCONNECTED')
 
   def connect(self, widget):
-    try:
-      print("Establishing RECEIVE port from Green...")
-      self.green_socket_in = socket.socket(AF_INET,SOCK_STREAM)
-      self.green_socket_in.connect((GREEN_RECEIVE))
-      print("...Success.")
-    except socket.error as msg:
-      print('...Failure')
-      self.green_socket_in.close()
-      pass
-    try:
-      print("Establishing SEND port to Green...")
-      self.green_socket_out = socket.socket(AF_INET,SOCK_STREAM)
-      self.green_socket_out.bind((GREEN_SEND))
-      self.green_socket_out.listen(QUEUE_MAX)
-      (self.green_connection, self.green_address) = self.green_socket_out.accept()
-      print("...Success.")
-    except socket.error as msg:
-      print('...Failure')
-      self.green_socket_out.close()
-      pass
-    self.status_green.set_text('CONNECTED')
-        
+    if (self.green_connected_out == False) and (self.green_connected_in == False):
+      try:
+        print("Establishing RECEIVE port from Green...")
+        self.green_socket_in = socket.socket(AF_INET,SOCK_STREAM)
+        self.green_socket_in.connect((GREEN_RECEIVE))
+        self.green_connected_in = True
+        print("...Success.")
+      except socket.error as msg:
+        print('...Failure')
+        self.green_socket_in.close()
+        self.green_connected_in = False
+        pass
+      try:
+        print("Establishing SEND port to Green...")
+        self.green_socket_out = socket.socket(AF_INET,SOCK_STREAM)
+        self.green_socket_out.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.green_socket_out.bind((GREEN_SEND))
+        self.green_socket_out.listen(QUEUE_MAX)
+        (self.green_connection, self.green_address) = self.green_socket_out.accept()
+        self.green_connected_out = True
+        print("...Success.")
+      except socket.error as msg:
+        self.green_socket_out.close()
+        self.green_connected_out = False
+        passprint('...Failure')
+      self.status_green.set_text('CONNECTED')
+    else:
+      print('ALREADY CONNECTED')
+
   def __init__(self): 
     ### Window
     self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
@@ -180,8 +189,9 @@ class BOSS_Server:
     self.vbox_app.add(self.hbox)
     self.window.show()
     ### Status
-    self.started = False
-    self.stopped = False
+    self.green_connected_in = False
+    self.green_connected_out = False
+
 # Main Function
 def main():
   gtk.main()

@@ -57,6 +57,11 @@ class BOSS_Worker:
       print('Initializing Worker...')
       self.connected_out = False
       self.connected_in = False
+      self.command = None
+      self.response = None
+      self.action = None
+      self.direction = None
+      self.distance = None
       print('...Success.')
     except Exception:
       print('...Failure.')
@@ -87,14 +92,15 @@ class BOSS_Worker:
       else:
         x += 1
     closest = sizes.index(numpy.max(sizes))
-    distance = WIDTH - numpy.max(sizes)
-    direction = offsets[closest]
+    self.distance = WIDTH - numpy.max(sizes)
+    self.direction = offsets[closest]
 
   def connect(self):
-    while (self.connected_out == False) or (self.connected_in == False):
+    if (self.connected_out == False) and (self.connected_in == False):
       try:
         print('Establishing SEND Port to Server...')
-        self.socket_out = socket.socket(AF_INET,SOCK_STREAM)
+        self.socket_out = socket.socket(AF_INET, SOCK_STREAM)
+        self.socket_out.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket_out.bind((ADDRESS_OUT))
         self.socket_out.listen(QUEUE_MAX)
         (self.connection,self.address) = self.socket_out.accept()
@@ -117,11 +123,14 @@ class BOSS_Worker:
         self.connected_in = False
         print('...Failure.')
         pass
-      
+    else:
+      print('ALREADY CONNECTED')
+
   def disconnect(self):
     try:
       print('Disconnecting from Server...')
       self.socket_in.close()
+      self.socket_out.close()
       self.connection.close()
       print('...Success')
     except Exception:
@@ -131,49 +140,64 @@ class BOSS_Worker:
   def receive_command(self):
     try: 
       print('Receiving COMMAND...')
-      command = self.socket_in.recv(BUFFER_SIZE)
-      print(str(command))
-      parsed_command = json.loads(command)
-      action = parsed_command['ACTION']
+      json_command = self.socket_in.recv(BUFFER_SIZE)
+      dict_command = json.loads(json_command)
+      print(str(dict_command))
+      self.command = dict_command['COMMAND']
       print('...Success.')
-    except ValueError:
-      print('...Failure.')
     except socket.error as SocketError:
       print('...Connection Failure.')
 
-  def send_response(self, status):   
+  def send_response(self):   
     try:
       print('Sending RESPONSE...')
-      response = json.dumps({'STATUS':status})
-      self.connection.send(response)
+      json_response = json.dumps({'RESPONSE':self.response})
+      self.connection.send(json_response)
       print("...Success.")
     except Exception:
       print("...Failure.")
 
-  def execute_action(self, command):
-    if (command == 'START'):
+  def execute_action(self):
+    print(self.command)
+    if (self.command == 'START'):
       self.action = 'START'
-    if (command == 'STOP'):
+    elif (self.command == 'STOP'):
       self.action == 'STOP'
-    if (command == 'DISCONNECT'):
-      self.action == 'DISCONNECT'
+    elif (self.command == 'CONTINUE'):
+      self.action = 'CONTINUE'
+    elif (self.command == 'PAUSE'):
+      self.action = 'PAUSE'
+    elif (self.command == 'DISCONNECT'):
+      self.action = 'DISCONNECT'
       self.connected_in = False
       self.connected_out = False
       self.disconnect()
     else:
       self.action = 'UNKNOWN'
-    
-    self.arduino.write(self.action)
-    self.arduino.readline()
+
+    try:
+      self.arduino.write(self.action)
+      self.status = self.arduino.readline()
+      self.response = 'OKAY'
+    except ValueError:
+      print("ValueError: Failed to parse signal, retrying...")
+    except OSError:
+      print("OSError: Connection lost, retrying...")
+    except SerialException:
+      print("Serial Exception: Connection lost, retrying...")
+    except SyntaxError:
+      print("Syntax Error: Failed to parse signal, retrying...")
+    except KeyError:
+      print("KeyError: Failed to parse signal, retrying...")
 
 if __name__ == "__main__":
   Worker = BOSS_Worker()
   while 1:
     Worker.connect()
     while (Worker.connected_in) or (Worker.connected_out):
-      Worker.use_camera()
-      command = Worker.receive_command()
-      response = Worker.execute_action(command)
-      Worker.send_response('COMPLETED')
+      #Worker.use_camera()
+      Worker.receive_command()
+      Worker.execute_action()
+      Worker.send_response()
     else:
       Worker.disconnect()
