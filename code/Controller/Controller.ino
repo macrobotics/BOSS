@@ -12,16 +12,17 @@
 #define BAUD 9600
 #define RIGHT_SERVO_PIN 10
 #define LEFT_SERVO_PIN 9
-#define FORWARD 'F'
-#define BACKWARD 'B'
-#define LEFT 'L'
-#define RIGHT 'R'
-#define GRAB 'G'
-#define STACK 'S'
+#define FORWARD 'FORWARD'
+#define BACKWARD 'BACKWARD'
+#define LEFT 'LEFT'
+#define RIGHT 'RIGHT'
+#define GRAB 'GRAB'
+#define STACK 'STACK'
+#define WAIT 'WAIT'
 
 /* --- Declarations right_servo--- */
 char command;
-boolean respose;
+int response;
 Servo left_servo;
 Servo right_servo;
 
@@ -35,62 +36,69 @@ void setup() {
 /* --- Loop --- */
 void loop() {
   command = Serial.read();
-  delay(1000);
   switch(command) {
     case FORWARD:
-      respose = forward();
+      response = forward();
     case BACKWARD:
-      respose = backward();
+      response = backward();
     case LEFT:
-      respose = left();
+      response = left();
     case RIGHT:
-      respose = right();
+      response = right();
     case GRAB:
-      respose = grab();
+      response = grab();
     case STACK:
-      respose = stack();
+      response = stack();
+    case WAIT:
+      response = wait();
     default:
-      break;
+      response = 0;
   }
   Serial.flush();
-  Serial.println(respose);
+  Serial.println(response);
 }
 
 /* --- Forward --- */
 // Move forward
-boolean forward() {
+int forward() {
   delay(500);
-  return true;
+  return 1;
 }
 
 /* --- Backward --- */
 // Reverse backward
-boolean backward() {
+int backward() {
   delay(500);
-  return true;
+  return 1;
 }
 
 /* --- Left --- */
 // Turn to the left
-boolean left() {
+int left() {
   delay(500);
-  return true;
+  return 1;
 }
 /* --- Right --- */
 // Turn to the right
-boolean right() {
+int right() {
   delay(500);
-  return true;
+  return 1;
 }
 /* --- Grab --- */
 // Grab bale
-boolean grab() {
+int grab() {
   delay(500);
-  return true;
+  return 1;
 }
 /* --- Stack --- */
 // Turn 180 and stack objects
-boolean stack() {
+int stack() {
   delay(500);
-  return true;
+  return 1;
+}
+
+/* --- Wait --- */
+int wait() {
+  delay(1000);
+  return 1;
 }
