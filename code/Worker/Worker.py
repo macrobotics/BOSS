@@ -28,13 +28,17 @@ WIDTH = 640
 HEIGHT = 480
 CENTER = WIDTH/2
 THRESHOLD = CENTER/2
+ERROR = pi/32
 RANGE = WIDTH/1.5
 BIAS = 2
-MINIMUM = 0.01
+MINIMUM_COLOR = 0.01
+MINIMUM_SIZE = WIDTH/32
 INTERVAL = 1
 MAX_CONNECTIONS = 5
-TURN = pi/4
+TURN = pi/16
 TRAVEL = 0.5
+ZONE_X = 8
+ZONE_Y = 8
 
 # Class Worker
 class BOSS_Worker:
@@ -61,6 +65,8 @@ class BOSS_Worker:
       self.command = None
       self.response = None
       self.action = None
+      self.error = None
+      self.error_number = None
       self.previous_actions = []
       self.green_objects = []
       self.red_objects = []
@@ -83,9 +89,9 @@ class BOSS_Worker:
     B = array(BGR[0].getdata(), dtype=float32)
     G = array(BGR[1].getdata(), dtype=float32)
     R = array(BGR[2].getdata(), dtype=float32)
-    NDI_G = ((BIAS)*G)/(R+B+MINIMUM)
-    NDI_R = ((BIAS)*R)/(G+B+MINIMUM)
-    NDI_B = ((BIAS)*B)/(R+G+MINIMUM)
+    NDI_G = ((BIAS)*G)/(R+B+MINIMUM_COLOR)
+    NDI_R = ((BIAS)*R)/(G+B+MINIMUM_COLOR)
+    NDI_B = ((BIAS)*B)/(R+G+MINIMUM_COLOR)
     # Reshape
     green_image = NDI_G.reshape(HEIGHT,WIDTH)
     blue_image = NDI_B.reshape(HEIGHT,WIDTH)
@@ -195,49 +201,16 @@ class BOSS_Worker:
       print('...Success.')
     except socket.error as SocketError:
       print('...Connection Failure.')
-  
-  ## Send RESPONSE to Server
-  def send_response(self):   
-    try:
-      print('Sending ACTION...')
-      json_response = json.dumps({'ACTION':self.action})
-      self.connection.send(json_response)
-      print(str(json_response))
-      print("...Success.")
-    except Exception:
-      print("...Failure.")
 
   ## After receiving COMMAND, determine action.
   def decide_action(self):
     if (self.command == 'START') or (self.command == 'CONTINUE'):
-      self.use_camera()
-      """
-      THE BRAIN
-      """
       if (self.gathered < 4):
-        (size,offset) = max(self.green_objects)
-        print(max(self.green_objects))
-        if (offset > 0 + THRESHOLD):
-          self.action = 'RIGHT'
-          self.orientation += TURN
-        elif (offset < 0 - THRESHOLD):
-          self.action = 'LEFT'
-          self.orientation -= TURN
-        else:
-          if (size > RANGE):
-            self.action = 'GRAB'
-            self.gathered += 1
-            print('Gathered: ' + str(self.gathered))
-          else:
-            self.action = 'FORWARD'
-            self.x += TRAVEL*cos(self.orientation)
-            self.y += TRAVEL*sin(self.orientation)
+        self.gather()
       elif (not self.stacked):
-        self.action = 'STACK'
-        self.stacked = True
+        self.stack()
       elif (not self.returned):
-        self.action = 'BACKWARD'
-        self.returned = True
+        self.return_home()
       else:
         self.action = 'WAIT'
     elif (self.command == 'STOP') or (self.command == 'PAUSE'):
@@ -249,17 +222,59 @@ class BOSS_Worker:
       self.disconnect()
     else:
       self.action = 'UNKNOWN'
-    self.control_arduino()
     self.previous_actions.append(self.action)
-    print(self.previous_actions)
-    print(self.x)
-    print(self.y)
+    print(self.action)
+
+  ## Gather Logic
+  def gather(self):
+    self.use_camera()
+    (size,offset) = max(self.green_objects)
+    if (offset > 0 + THRESHOLD) and (size > MINIMUM_SIZE):
+      self.action = 'RIGHT'
+      self.orientation += TURN #!
+    elif (offset < 0 - THRESHOLD) and (size > MINIMUM_SIZE):
+      self.action = 'LEFT'
+      self.orientation -= TURN #!
+    elif (size > MINIMUM_SIZE):
+      if (size > RANGE):
+        self.action = 'GRAB'
+        self.gathered += 1 #!
+      else:
+        self.action = 'FORWARD'
+        self.x += TRAVEL*cos(self.orientation) #!
+        self.y += TRAVEL*sin(self.orientation) #!
+    else:
+      self.action = 'RIGHT'
+      self.orientation += TURN #!
+
+  ## Stack Logic
+  def stack(self):
+    if (not (int(self.x) == ZONE_X and int(self.y) == ZONE_Y)):
+      if (self.orientation > tan((ZONE_Y - self.y)/(ZONE_X - self.x)) + ERROR): #!
+        self.action = 'LEFT'
+        self.orientation -= TURN
+      elif (self.orientation < tan((ZONE_Y - self.y)/(ZONE_X - self.x)) - ERROR): #!
+        self.action = 'RIGHT'
+        self.orientation += TURN
+      else:
+        self.action = 'FORWARD'
+        self.x += TRAVEL*cos(self.orientation) #!
+        self.y += TRAVEL*sin(self.orientation) #!
+    else:  
+      self.action = 'STACK'
+      self.stacked = True #!
+
+  def return_home(self):
+    self.action = 'RETURN'
+    self.returned = True #!
 
   ## Execute action with arduino.
   def control_arduino(self):
     try:
+      print('Sending action to arduino...')
       self.arduino.write(self.action)
-      self.status = self.arduino.readline()
+      self.error_number = int(self.arduino.readline())
+      print('...Success.')
     except ValueError:
       print("ValueError: Failed to parse signal, retrying...")
     except OSError:
@@ -271,6 +286,32 @@ class BOSS_Worker:
     except KeyError:
       print("KeyError: Failed to parse signal, retrying...")
 
+  ## Handle Errors from Arduino
+  def handle_error(self):
+    if (self.error_number == 0):
+      self.error = 'NONE'
+    elif (self.error_number == 1):
+      self.error = 'TOO CLOSE'
+    elif (self.error_number == 2):
+      self.error = 'TOO FAR'
+      self.gathered -= 1
+    elif (self.error_number == 3):
+      self.error = 'LOAD FAILED'
+      self.gathered -= 1
+    else:
+      self.error = 'UNKNOWN ERROR'
+
+  ## Send RESPONSE to Server
+  def send_response(self):   
+    try:
+      print('Sending ACTION...')
+      json_response = json.dumps({'ACTION':self.action, 'ERROR':self.error})
+      self.connection.send(json_response)
+      print(str(json_response))
+      print("...Success.")
+    except Exception:
+      print("...Failure.")
+
 # Main
 if __name__ == "__main__":
   Worker = BOSS_Worker()
@@ -279,6 +320,8 @@ if __name__ == "__main__":
     while (Worker.connected_in) or (Worker.connected_out):
       Worker.receive_command()
       Worker.decide_action()
+      Worker.control_arduino()
+      Worker.handle_error()
       Worker.send_response()
     else:
       Worker.disconnect()
