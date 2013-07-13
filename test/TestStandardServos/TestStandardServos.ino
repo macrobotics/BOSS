@@ -1,5 +1,4 @@
 /*
-  SLAVE.ino
   License: Creative Commons 2013, Trevor Stanhope
   Updated: 2013-06-13
   Summary: 
@@ -12,19 +11,25 @@
 #define BAUD 9600
 
 /* --- Declarations --- */
-Servo leftServo;
-Servo rightServo;
+Servo left_servo;
+Servo right_servo;
 
 /* --- Setup --- */
 void setup() {
-  leftServo.attach(9);
-  rightServo.attach(10);
+  left_servo.attach(9);
+  right_servo.attach(10);
   Serial.begin(BAUD);
 }
 
 /* --- Loop --- */
 void loop() {
-  Serial.println(leftServo.read());
-  leftServo.writeMicroseconds(1000);
-  leftServo.write(100);
+  left_servo.write(90);
+  right_servo.write(90);
+  delay(1000);
+  left_servo.write(0);
+  right_servo.write(0);
+  delay(1000);
+  left_servo.write(180);
+  right_servo.write(180);
+  delay(1000);
 }

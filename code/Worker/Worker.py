@@ -17,17 +17,17 @@ import sys
 import ast
 
 # Setup
-ADDRESS_IN = ('localhost',50000)
-ADDRESS_OUT = ('localhost',50001)
+ADDRESS_IN = ('10.42.0.1',50000)
+ADDRESS_OUT = ('10.42.0.3',50001)
 BUFFER_SIZE = 4096
 QUEUE_MAX = 5
 BAUD = 9600
-DEVICE = '/dev/ttyACM0'
-CAMERA_INDEX = 1
+DEVICE = '/dev/ttyS0' # '/dev/ttyS0' for AlaMode
+CAMERA_INDEX = 0
 WIDTH = 640
 HEIGHT = 480
 CENTER = WIDTH/2
-THRESHOLD = CENTER/2
+THRESHOLD = CENTER/4
 ERROR = pi/32
 RANGE = WIDTH/1.5
 BIAS = 2
@@ -39,9 +39,15 @@ TURN = pi/16
 TRAVEL = 0.5
 ZONE_X = 8
 ZONE_Y = 8
+ERROR_NONE = 0
+ERROR_CONNECTION = 255
+ERROR_CLOSE = 1
+ERROR_FAR = 2
+ERROR_LOAD = 3
+ERROR_ACTION = 4
 
 # Class Worker
-class BOSS_Worker:
+class Worker:
   ## Initialize Worker robot.
   def __init__(self):
     try:
@@ -53,7 +59,7 @@ class BOSS_Worker:
     except Exception:
       print('...Failure.')
     try:
-      print('Setting up Arduino...')
+      print('Setting up Controller...')
       self.arduino = serial.Serial(DEVICE, BAUD)
       print('...Success.')
     except Exception:
@@ -178,22 +184,10 @@ class BOSS_Worker:
     else:
       print('ALREADY CONNECTED')
   
-  ## Disconnect from Server.
-  def disconnect(self):
-    try:
-      print('Disconnecting from Server...')
-      self.socket_in.close()
-      self.socket_out.close()
-      self.connection.close()
-      print('...Success')
-    except Exception:
-      print('...Failure')
-      pass
-  
   ## Receives COMMAND from Server.
   def receive_command(self):
     try: 
-      print('Receiving COMMAND...')
+      print('Receiving COMMAND from Server...')
       json_command = self.socket_in.recv(BUFFER_SIZE)
       dict_command = json.loads(json_command)
       self.command = dict_command['COMMAND']
@@ -213,48 +207,66 @@ class BOSS_Worker:
         self.return_home()
       else:
         self.action = 'WAIT'
-    elif (self.command == 'STOP') or (self.command == 'PAUSE'):
-      self.action == 'WAIT'
+    elif (self.command == 'STOP'):
+      self.action = 'WAIT'
+    elif (self.command == 'PAUSE'):
+      self.action = 'WAIT'
     elif (self.command == 'DISCONNECT'):
       self.action = 'WAIT'
-      self.connected_in = False
-      self.connected_out = False
       self.disconnect()
     else:
       self.action = 'UNKNOWN'
     self.previous_actions.append(self.action)
-    print(self.action)
 
   ## Gather Logic
   def gather(self):
+    print('GATHERING')
     self.use_camera()
     (size,offset) = max(self.green_objects)
-    if (offset > 0 + THRESHOLD) and (size > MINIMUM_SIZE):
-      self.action = 'RIGHT'
-      self.orientation += TURN #!
-    elif (offset < 0 - THRESHOLD) and (size > MINIMUM_SIZE):
-      self.action = 'LEFT'
-      self.orientation -= TURN #!
+    if (offset > THRESHOLD) and (size > MINIMUM_SIZE):
+      if (offset > 3*THRESHOLD):
+        self.action = 'RIGHT3'
+        self.orientation += 3*TURN #!
+      elif (offset > 2*THRESHOLD):
+        self.action = 'RIGHT2'
+        self.orientation += 2*TURN #!
+      elif (offset < 1*THRESHOLD):
+        self.action = 'RIGHT1'
+        self.orientation += 1*TURN #!
+    elif (offset < -THRESHOLD) and (size > MINIMUM_SIZE):
+      if (offset < -3*THRESHOLD):
+        self.action = 'LEFT3'
+        self.orientation -= 3*TURN #!
+      elif (offset < -2*THRESHOLD):
+        self.action = 'LEFT2'
+        self.orientation -= 2*TURN #!
+      elif (offset < -1*THRESHOLD):
+        self.action = 'LEFT1'
+        self.orientation -= 1*TURN #!
     elif (size > MINIMUM_SIZE):
       if (size > RANGE):
         self.action = 'GRAB'
         self.gathered += 1 #!
-      else:
+      elif (not self.error_number == ERROR_CLOSE):
         self.action = 'FORWARD'
         self.x += TRAVEL*cos(self.orientation) #!
         self.y += TRAVEL*sin(self.orientation) #!
+      else:
+        self.action = 'RIGHT3'
+        self.orientation += TURN #!
     else:
-      self.action = 'RIGHT'
-      self.orientation += TURN #!
+      self.action = 'RIGHT3'
+      self.orientation += 3*TURN #!
 
   ## Stack Logic
   def stack(self):
+    print('STACKING')
     if (not (int(self.x) == ZONE_X and int(self.y) == ZONE_Y)):
       if (self.orientation > tan((ZONE_Y - self.y)/(ZONE_X - self.x)) + ERROR): #!
-        self.action = 'LEFT'
+        self.action = 'LEFT1'
         self.orientation -= TURN
       elif (self.orientation < tan((ZONE_Y - self.y)/(ZONE_X - self.x)) - ERROR): #!
-        self.action = 'RIGHT'
+        self.action = 'RIGHT1'
         self.orientation += TURN
       else:
         self.action = 'FORWARD'
@@ -265,63 +277,97 @@ class BOSS_Worker:
       self.stacked = True #!
 
   def return_home(self):
+    print('RETURNING')
     self.action = 'RETURN'
     self.returned = True #!
 
   ## Execute action with arduino.
   def control_arduino(self):
+    ### Send
     try:
-      print('Sending action to arduino...')
+      print('Sending ACTION to Controller...')
+      print(self.action)
       self.arduino.write(self.action)
+      print('...Success.')
+    except Exception:
+      print('...Failure.')
+    ### Receive
+    try:
+      print('Receiving ERROR from Controller...')
       self.error_number = int(self.arduino.readline())
       print('...Success.')
     except ValueError:
+      self.error_number = ERROR_PARSE
       print("ValueError: Failed to parse signal, retrying...")
     except OSError:
+      self.error_number = ERROR_CONNECTION
       print("OSError: Connection lost, retrying...")
     except SerialException:
+      self.error_number = ERROR_CONNECTION
       print("Serial Exception: Connection lost, retrying...")
     except SyntaxError:
+      self.error_number = ERROR_PARSE
       print("Syntax Error: Failed to parse signal, retrying...")
     except KeyError:
+      self.error_number = ERROR_PARSE
       print("KeyError: Failed to parse signal, retrying...")
 
   ## Handle Errors from Arduino
   def handle_error(self):
-    if (self.error_number == 0):
+    if (self.error_number == ERROR_NONE):
       self.error = 'NONE'
-    elif (self.error_number == 1):
+    elif (self.error_number == ERROR_CLOSE):
       self.error = 'TOO CLOSE'
-    elif (self.error_number == 2):
+    elif (self.error_number == ERROR_FAR):
       self.error = 'TOO FAR'
-      self.gathered -= 1
-    elif (self.error_number == 3):
+    elif (self.error_number == ERROR_LOAD):
       self.error = 'LOAD FAILED'
       self.gathered -= 1
+    elif (self.error_number == ERROR_PARSE):
+      self.error = 'PARSE FAILED'
+    elif (self.error_number == ERROR_ACTION):
+      self.error = 'BAD ACTION'
     else:
       self.error = 'UNKNOWN ERROR'
 
   ## Send RESPONSE to Server
   def send_response(self):   
     try:
-      print('Sending ACTION...')
-      json_response = json.dumps({'ACTION':self.action, 'ERROR':self.error})
+      print('Sending RESPONSE to Server ...')
+      json_response = json.dumps({'ACTION':self.action, 'ERROR':self.error, 'GATHERED':str(self.gathered)})
       self.connection.send(json_response)
       print(str(json_response))
       print("...Success.")
     except Exception:
       print("...Failure.")
 
+  ## Disconnect from Server.
+  def disconnect(self):
+    try:
+      print('Disconnecting from Server...')
+      self.socket_in.close()
+      self.socket_out.close()
+      self.connection.close()
+      self.connected_in = False
+      self.connected_out = False
+      print('...Success')
+    except Exception:
+      print('...Failure')
+      pass
+
 # Main
 if __name__ == "__main__":
-  Worker = BOSS_Worker()
+  green = Worker()
   while 1:
-    Worker.connect()
-    while (Worker.connected_in) or (Worker.connected_out):
-      Worker.receive_command()
-      Worker.decide_action()
-      Worker.control_arduino()
-      Worker.handle_error()
-      Worker.send_response()
+    green.connect()
+    while (green.connected_in) or (green.connected_out):
+      green.receive_command()
+      green.decide_action()
+      green.control_arduino()
+      green.handle_error()
+      if (green.connected_in == False) or (green.connected_out == False):
+        break
+      else:
+        green.send_response()
     else:
-      Worker.disconnect()
+      green.disconnect()

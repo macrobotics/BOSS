@@ -12,7 +12,7 @@ import time
 
 ## Global
 GREEN_SEND = ('', 50000)
-GREEN_RECEIVE = ('localhost', 50001)
+GREEN_RECEIVE = ('10.42.0.3', 50001)
 RED_SEND = ('', 60000)
 RED_RECEIVE = ('localhost', 60001)
 BLUE_SEND = ('', 70000)
@@ -20,33 +20,41 @@ BLUE_RECEIVE = ('localhost', 70001)
 BUFFER_SIZE = 4096
 QUEUE_MAX = 5
 
-class BOSS_Server:
+class Server:
   def run(self, widget, checkbox, window):
     if (checkbox.get_active()):
       self.send_command('START')
+      self.update_gui()
       self.receive_response()
+      self.update_gui()
       while (checkbox.get_active()):
         self.send_command('CONTINUE')
+        self.update_gui()
         self.receive_response()
-        while gtk.events_pending():
-          gtk.main_iteration_do(False)
+        self.update_gui()
       else:
         self.send_command('PAUSE')
+        self.update_gui()
         self.receive_response()
+        self.update_gui()
     else:
       self.send_command('STOP')
+      self.update_gui()
       self.receive_response()
-      while gtk.events_pending():
-        gtk.main_iteration_do(False)
+      self.update_gui()
   
   def receive_response(self):
     try:
-      print("Receiving ACTION...")
+      print("Receiving ACTION from Green Worker...")
       json_response = self.green_socket_in.recv(BUFFER_SIZE)
       parsed_response = json.loads(json_response)
-      response = parsed_response['ACTION']
-      self.action_green.set_text(response)
-      print(response)
+      action = parsed_response['ACTION']
+      error = parsed_response['ERROR']
+      gathered = parsed_response['GATHERED']
+      self.action_green.set_text(action)
+      self.error_green.set_text(error)
+      self.gathered_green.set_text(gathered)
+      print(str(json_response))
       print("...Success.")
     except socket.error as Error:
       print('...Socket Failure.')
@@ -55,11 +63,11 @@ class BOSS_Server:
 
   def send_command(self, command):
     try:
-      print("Sending COMMAND...")
+      print("Sending COMMAND to Green Worker...")
       json_command = json.dumps({'COMMAND':command})
       self.green_connection.send(json_command)
       self.command_green.set_text(command)
-      print(command)
+      print(str(json_command))
       print("...Success.")
     except socket.error as Error:
       print('...Socket Failure.')
@@ -105,7 +113,7 @@ class BOSS_Server:
         self.green_connected_in = False
         pass
       try:
-        print("Establishing SEND port to Green...")
+        print("Establishing SEND port to Green Worker...")
         self.green_socket_out = socket.socket(AF_INET,SOCK_STREAM)
         self.green_socket_out.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.green_socket_out.bind((GREEN_SEND))
@@ -121,11 +129,15 @@ class BOSS_Server:
     else:
       print('ALREADY CONNECTED')
 
+  def update_gui(self):
+    while gtk.events_pending():
+      gtk.main_iteration_do(False)
+
   def __init__(self): 
     ### Window
     self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
     self.window.set_title("BOSS")
-    self.window.set_size_request(500, 350)
+    self.window.set_size_request(640, 300)
     self.window.connect("delete_event", self.close)
     self.window.set_border_width(10) 
     ### Table
@@ -135,7 +147,7 @@ class BOSS_Server:
     self.label_app = gtk.Label("Task Progress: ")
     self.label_app.show()
     self.vbox_app.pack_start(self.label_app, False, False, 6)
-    self.table_layout = gtk.Table(rows=4, columns=4, homogeneous=True)
+    self.table_layout = gtk.Table(rows=4, columns=6, homogeneous=True)
     ### Labels
     self.label_name = gtk.Label("NAME")
     self.label_name.show()
@@ -149,6 +161,12 @@ class BOSS_Server:
     self.label_action = gtk.Label("ACTION")
     self.label_action.show()
     self.table_layout.attach(self.label_action, 3, 4, 0, 1, 0,0,0,0)
+    self.label_error = gtk.Label("ERROR")
+    self.label_error.show()
+    self.table_layout.attach(self.label_error, 4, 5, 0, 1, 0,0,0,0)
+    self.label_error = gtk.Label("GATHERED")
+    self.label_error.show()
+    self.table_layout.attach(self.label_error, 5, 6, 0, 1, 0,0,0,0)
     ### Red
     self.label_red = gtk.Label("RED")
     self.label_red.show()
@@ -162,6 +180,12 @@ class BOSS_Server:
     self.command_red = gtk.Label("STANDBY")
     self.command_red.show()
     self.table_layout.attach(self.command_red, 2, 3, 1, 2, 0,0,0,0)
+    self.error_red = gtk.Label("NONE")
+    self.error_red.show()
+    self.table_layout.attach(self.error_red, 4, 5, 1, 2, 0,0,0,0)
+    self.gathered_red = gtk.Label("0")
+    self.gathered_red.show()
+    self.table_layout.attach(self.gathered_red, 5, 6, 1, 2, 0,0,0,0)
     ### Green
     self.label_green = gtk.Label("GREEN")
     self.label_green.show()
@@ -175,6 +199,12 @@ class BOSS_Server:
     self.command_green = gtk.Label("STANDBY")
     self.command_green.show()
     self.table_layout.attach(self.command_green, 2, 3, 2, 3, 0,0,0,0)
+    self.error_green = gtk.Label("NONE")
+    self.error_green.show()
+    self.table_layout.attach(self.error_green, 4, 5, 2, 3, 0,0,0,0)
+    self.gathered_green = gtk.Label("0")
+    self.gathered_green.show()
+    self.table_layout.attach(self.gathered_green, 5, 6, 2, 3, 0,0,0,0)
     ### Blue
     self.label_blue = gtk.Label("BLUE")
     self.label_blue.show()
@@ -188,6 +218,12 @@ class BOSS_Server:
     self.command_blue = gtk.Label("STANDBY")
     self.command_blue.show()
     self.table_layout.attach(self.command_blue, 2, 3, 3, 4, 0,0,0,0)
+    self.error_blue = gtk.Label("NONE")
+    self.error_blue.show()
+    self.table_layout.attach(self.error_blue, 4, 5, 3, 4, 0,0,0,0)
+    self.gathered_blue = gtk.Label("0")
+    self.gathered_blue.show()
+    self.table_layout.attach(self.gathered_blue, 5, 6, 3, 4, 0,0,0,0)
     ### Total
     self.table_layout.show()
     self.vbox_app.add(self.table_layout)
@@ -221,5 +257,5 @@ def main():
 
 # Setup Function
 if __name__ == "__main__":
-  GUI = BOSS_Server()
+  GUI = Server()
   main()

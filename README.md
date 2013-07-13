@@ -8,7 +8,7 @@ is important to update Apt:
 	
 Then install python and the GTK libraries:
 
-	sudo apt-get install python python-simplejson python-gtk2
+	sudo apt-get install python python-gtk2
 	
 ## Slaves (RaspberryPi)
 ### Hardware Configuration
@@ -31,7 +31,7 @@ From the directory of the image file (this will take a while):
 The first time the device is booted, it will prompt to set configurations.
 This process can be repeated later with the command:
 
-    raspi-config
+  raspi-config
     
 When in the configuration editor, the following are ideal settings:
 
@@ -39,16 +39,9 @@ When in the configuration editor, the following are ideal settings:
 2. Overclocking? --> High
 3. SSH? --> Enable
 4. Desktop on Boot? --> Disable
+5. Memory Split --> 256MB
 
-### Software
-Update Apt:
+### Worker's 'Software
+To install the system, simply execute INSTALL.sh from the BOSS/ directory:
   
-  sudo apt-get update && sudo apt-get upgrade
-  
-Install python and the additional modules:
-
-  sudo apt-get install python python-opencv python-imaging python-numpy
-  
-Install Arduino:
-
-  sudo apt-get install arduino
+    sh INSTALL.sh
