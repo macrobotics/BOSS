@@ -1,8 +1,6 @@
 /*
-  SLAVE.ino
+  Controller.ino
   License: Creative Commons 2013, Trevor Stanhope
-  Updated: 2013-06-13
-  Summary: 
 */
 
 /*

@@ -1,4 +1,7 @@
 #!/usr/bin/python
+# Server.py
+# MacRobotics
+
 # Imports
 import pygtk
 pygtk.require('2.0')
@@ -10,7 +13,7 @@ import socket
 import json
 import time
 
-## Global
+# Global
 GREEN_SEND = ('', 50000)
 GREEN_RECEIVE = ('10.42.0.3', 50001)
 RED_SEND = ('', 60000)
@@ -20,7 +23,10 @@ BLUE_RECEIVE = ('localhost', 70001)
 BUFFER_SIZE = 4096
 QUEUE_MAX = 5
 
+# Server Class
 class Server:
+
+  ## Run BOSS
   def run(self, widget, checkbox, window):
     if (checkbox.get_active()):
       self.send_command('START')
@@ -43,6 +49,7 @@ class Server:
       self.receive_response()
       self.update_gui()
   
+  ## Receive Response from Workers
   def receive_response(self):
     try:
       print("Receiving ACTION from Green Worker...")
@@ -61,6 +68,7 @@ class Server:
     except ValueError:
       print('...JSON Failure.')
 
+  ## Send Command to Workers
   def send_command(self, command):
     try:
       print("Sending COMMAND to Green Worker...")
@@ -74,6 +82,7 @@ class Server:
     except ValueError:
       print('...JSON Failure.')
       
+  ## Close GUI
   def close(self, widget, window):
     try:
       print("Stopping GUI...")
@@ -81,7 +90,8 @@ class Server:
       print("...Success.")
     except Exception:
       print("...Failure.")
-
+  
+  ## Disconnect
   def disconnect(self, widget):
     try:
       print("Closing all connections...")
@@ -98,7 +108,8 @@ class Server:
     self.status_red.set_text('DISCONNECTED')
     self.status_green.set_text('DISCONNECTED')
     self.status_blue.set_text('DISCONNECTED')
-
+  
+  ## Connect
   def connect(self, widget):
     if (self.green_connected_out == False) and (self.green_connected_in == False):
       try:
@@ -129,17 +140,25 @@ class Server:
     else:
       print('ALREADY CONNECTED')
 
+  ## Update GUI
   def update_gui(self):
     while gtk.events_pending():
       gtk.main_iteration_do(False)
+  
+  ## Initialization
+  def __init__(self):
 
-  def __init__(self): 
+    ### Initialize variables
+    self.green_connected_in = False
+    self.green_connected_out = False
+
     ### Window
     self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
     self.window.set_title("BOSS")
     self.window.set_size_request(640, 300)
     self.window.connect("delete_event", self.close)
     self.window.set_border_width(10) 
+
     ### Table
     self.vbox_app = gtk.VBox(False, 0)
     self.window.add(self.vbox_app)
@@ -148,6 +167,7 @@ class Server:
     self.label_app.show()
     self.vbox_app.pack_start(self.label_app, False, False, 6)
     self.table_layout = gtk.Table(rows=4, columns=6, homogeneous=True)
+
     ### Labels
     self.label_name = gtk.Label("NAME")
     self.label_name.show()
@@ -167,6 +187,7 @@ class Server:
     self.label_error = gtk.Label("GATHERED")
     self.label_error.show()
     self.table_layout.attach(self.label_error, 5, 6, 0, 1, 0,0,0,0)
+
     ### Red
     self.label_red = gtk.Label("RED")
     self.label_red.show()
@@ -186,6 +207,7 @@ class Server:
     self.gathered_red = gtk.Label("0")
     self.gathered_red.show()
     self.table_layout.attach(self.gathered_red, 5, 6, 1, 2, 0,0,0,0)
+
     ### Green
     self.label_green = gtk.Label("GREEN")
     self.label_green.show()
@@ -205,6 +227,7 @@ class Server:
     self.gathered_green = gtk.Label("0")
     self.gathered_green.show()
     self.table_layout.attach(self.gathered_green, 5, 6, 2, 3, 0,0,0,0)
+
     ### Blue
     self.label_blue = gtk.Label("BLUE")
     self.label_blue.show()
@@ -224,9 +247,11 @@ class Server:
     self.gathered_blue = gtk.Label("0")
     self.gathered_blue.show()
     self.table_layout.attach(self.gathered_blue, 5, 6, 3, 4, 0,0,0,0)
+
     ### Total
     self.table_layout.show()
     self.vbox_app.add(self.table_layout)
+
     ### Hbox
     self.hbox = gtk.HBox(False, 0)
     global b_entry_checkbox
@@ -243,10 +268,12 @@ class Server:
     self.button_disconnect.connect("clicked", self.disconnect)
     self.hbox.pack_start(self.button_disconnect, True, True, 0)
     self.button_disconnect.show()
+
     ### Display
     self.hbox.show()
     self.vbox_app.add(self.hbox)
     self.window.show()
+
     ### Status
     self.green_connected_in = False
     self.green_connected_out = False

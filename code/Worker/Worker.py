@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # Worker.py
+# MacRobotics
 
 # Imports
 from serial import SerialException
