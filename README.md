@@ -4,21 +4,21 @@
 The display for the Master is rendered using python and gtk2. First it
 is important to update Apt:
 
-	sudo apt-get update && sudo apt-get upgrade
+	  sudo apt-get update && sudo apt-get upgrade
 	
 Then install python and the GTK libraries:
 
-	sudo apt-get install python python-gtk2
+	  sudo apt-get install python python-gtk2
 	
 ## Workers (RaspberryPi)
 ### Hardware Configuration
 Download 2013-05-25-wheezy-raspbian.img.
 
-  wget http://downloads.raspberrypi.org/images/raspbian/2013-05-25-wheezy-raspbian/2013-05-25-wheezy-raspbian.zip
+    wget http://downloads.raspberrypi.org/images/raspbian/2013-05-25-wheezy-raspbian/2013-05-25-wheezy-raspbian.zip
   
 Unzip the image:
 
-  unzip 2013-05-25-wheezy-raspbian.zip
+    unzip 2013-05-25-wheezy-raspbian.zip
   
 Unmount all partitions of the SD card:
 
@@ -31,7 +31,7 @@ From the directory of the image file (this will take a while):
 The first time the device is booted, it will prompt to set configurations.
 This process can be repeated later with the command:
 
-  raspi-config
+    raspi-config
     
 When in the configuration editor, the following are ideal settings:
 
