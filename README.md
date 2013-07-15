@@ -1,5 +1,5 @@
 # Bale Optical Stacking System (BOSS)
-## Master (Laptop)
+## Server (Laptop)
 ### Python and GTK
 The display for the Master is rendered using python and gtk2. First it
 is important to update Apt:
@@ -10,7 +10,7 @@ Then install python and the GTK libraries:
 
 	sudo apt-get install python python-gtk2
 	
-## Slaves (RaspberryPi)
+## Workers (RaspberryPi)
 ### Hardware Configuration
 Download 2013-05-25-wheezy-raspbian.img.
 
