@@ -18,12 +18,12 @@ import sys
 import ast
 
 # Setup
-ADDRESS_IN = ('10.42.0.1',50000)
-ADDRESS_OUT = ('10.42.0.3',50001)
+ADDRESS_IN = ('localhost',50000)
+ADDRESS_OUT = ('localhost',50001)
 BUFFER_SIZE = 4096
 QUEUE_MAX = 5
 BAUD = 9600
-DEVICE = '/dev/ttyS0' # '/dev/ttyS0' for AlaMode
+DEVICE = '/dev/ttyACM0' # '/dev/ttyS0' for AlaMode, '/dev/ttyAMC0' for Uno
 CAMERA_INDEX = 0
 WIDTH = 640
 HEIGHT = 480
@@ -41,6 +41,7 @@ TRAVEL = 0.5
 ZONE_X = 8
 ZONE_Y = 8
 ERROR_NONE = 0
+ERROR_PARSE = 254
 ERROR_CONNECTION = 255
 ERROR_CLOSE = 1
 ERROR_FAR = 2
@@ -207,13 +208,13 @@ class Worker:
       elif (not self.returned):
         self.return_home()
       else:
-        self.action = 'WAIT'
+        self.action = 'W'
     elif (self.command == 'STOP'):
-      self.action = 'WAIT'
+      self.action = 'W'
     elif (self.command == 'PAUSE'):
-      self.action = 'WAIT'
+      self.action = 'W'
     elif (self.command == 'DISCONNECT'):
-      self.action = 'WAIT'
+      self.action = 'W'
       self.disconnect()
     else:
       self.action = 'UNKNOWN'
@@ -225,65 +226,54 @@ class Worker:
     self.use_camera()
     (size,offset) = max(self.green_objects)
     if (offset > THRESHOLD) and (size > MINIMUM_SIZE):
-      if (offset > 3*THRESHOLD):
-        self.action = 'RIGHT3'
-        self.orientation += 3*TURN #!
-      elif (offset > 2*THRESHOLD):
-        self.action = 'RIGHT2'
-        self.orientation += 2*TURN #!
-      elif (offset < 1*THRESHOLD):
-        self.action = 'RIGHT1'
-        self.orientation += 1*TURN #!
+      self.action = 'R'
+      self.orientation += TURN #!
     elif (offset < -THRESHOLD) and (size > MINIMUM_SIZE):
-      if (offset < -3*THRESHOLD):
-        self.action = 'LEFT3'
-        self.orientation -= 3*TURN #!
-      elif (offset < -2*THRESHOLD):
-        self.action = 'LEFT2'
-        self.orientation -= 2*TURN #!
-      elif (offset < -1*THRESHOLD):
-        self.action = 'LEFT1'
-        self.orientation -= 1*TURN #!
+      self.action = 'L'
+      self.orientation -= TURN #!
     elif (size > MINIMUM_SIZE):
       if (size > RANGE):
-        self.action = 'GRAB'
+        self.action = 'G'
         self.gathered += 1 #!
       elif (not self.error_number == ERROR_CLOSE):
-        self.action = 'FORWARD'
+        self.action = 'F'
         self.x += TRAVEL*cos(self.orientation) #!
         self.y += TRAVEL*sin(self.orientation) #!
       else:
-        self.action = 'RIGHT3'
+        self.action = 'R'
         self.orientation += TURN #!
     else:
-      self.action = 'RIGHT3'
-      self.orientation += 3*TURN #!
+      self.action = 'R'
+      self.orientation += TURN #!
 
   ## Stack Logic
   def stack(self):
     print('STACKING')
     if (not (int(self.x) == ZONE_X and int(self.y) == ZONE_Y)):
       if (self.orientation > tan((ZONE_Y - self.y)/(ZONE_X - self.x)) + ERROR): #!
-        self.action = 'LEFT1'
+        self.action = 'L'
         self.orientation -= TURN
       elif (self.orientation < tan((ZONE_Y - self.y)/(ZONE_X - self.x)) - ERROR): #!
-        self.action = 'RIGHT1'
+        self.action = 'R'
         self.orientation += TURN
       else:
-        self.action = 'FORWARD'
+        self.action = 'F'
         self.x += TRAVEL*cos(self.orientation) #!
         self.y += TRAVEL*sin(self.orientation) #!
     else:  
-      self.action = 'STACK'
+      self.action = 'S'
       self.stacked = True #!
 
   def return_home(self):
     print('RETURNING')
-    self.action = 'RETURN'
+    self.action = 'F'
     self.returned = True #!
 
   ## Execute action with arduino.
   def control_arduino(self):
+
+    print(time.time())
+
     ### Send
     try:
       print('Sending ACTION to Controller...')
@@ -292,10 +282,12 @@ class Worker:
       print('...Success.')
     except Exception:
       print('...Failure.')
+
     ### Receive
     try:
       print('Receiving ERROR from Controller...')
       self.error_number = int(self.arduino.readline())
+      print(self.error_number)
       print('...Success.')
     except ValueError:
       self.error_number = ERROR_PARSE
