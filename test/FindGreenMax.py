@@ -16,11 +16,9 @@ import subprocess
 
 ### Declarations
 RATE = 60 # 5 volt per 4096 Hz
-LEFT_PIN = 24
-RIGHT_PIN = 25
-CAMERA_INDEX = 1
-WIDTH = 160
-HEIGHT = 120
+CAMERA_INDEX = 0
+WIDTH = 640
+HEIGHT = 480
 CENTER = WIDTH/2
 AVERAGES = 4 # number of previous images to store for average
 SLOPE = 2.0

@@ -8,6 +8,7 @@ from socket import *
 from numpy import *
 from PIL import Image 
 from cv2 import VideoCapture
+from cv import CaptureFromCAM, QueryFrame
 from time import *
 import numpy
 import socket
@@ -16,6 +17,7 @@ import json
 import serial
 import sys
 import ast
+import subprocess
 
 # Setup
 ADDRESS_IN = ('localhost',50000)
@@ -25,21 +27,22 @@ QUEUE_MAX = 5
 BAUD = 9600
 DEVICE = '/dev/ttyACM0' # '/dev/ttyS0' for AlaMode, '/dev/ttyAMC0' for Uno
 CAMERA_INDEX = 0
-WIDTH = 640
-HEIGHT = 480
-CENTER = WIDTH/2
-THRESHOLD = CENTER/4
-ERROR = pi/32
+WIDTH = 640.0
+HEIGHT = 480.0
+CENTER = WIDTH/2.0
+THRESHOLD = CENTER/4.0
+ERROR = pi/32.0
 RANGE = WIDTH/1.5
-BIAS = 2
+BIAS = 100.0
 MINIMUM_COLOR = 0.01
-MINIMUM_SIZE = WIDTH/32
-INTERVAL = 1
+MINIMUM_SIZE = WIDTH/32.0
 MAX_CONNECTIONS = 5
-TURN = pi/16
+TURN = pi/16.0
 TRAVEL = 0.5
-ZONE_X = 8
-ZONE_Y = 8
+ZONE_X = 8.0
+ZONE_Y = 8.0
+START_X = 0.0
+START_Y = 0.0
 ERROR_NONE = 0
 ERROR_PARSE = 254
 ERROR_CONNECTION = 255
@@ -52,14 +55,15 @@ ERROR_ACTION = 4
 class Worker:
   ## Initialize Worker robot.
   def __init__(self):
-    try:
-      print('Setting up Camera...')
-      self.camera = VideoCapture(CAMERA_INDEX)
-      self.camera.set(3,WIDTH)
-      self.camera.set(4,HEIGHT)
-      print('...Success.')
-    except Exception:
-      print('...Failure.')
+#    try:
+#      print('Setting up Camera...')
+#      self.camera = VideoCapture(CAMERA_INDEX)
+#      self.camera.set(3,WIDTH)
+#      self.camera.set(4,HEIGHT)
+#      self.camera
+#      print('...Success.')
+#    except Exception:
+#     print('...Failure.')
     try:
       print('Setting up Controller...')
       self.arduino = serial.Serial(DEVICE, BAUD)
@@ -91,69 +95,45 @@ class Worker:
 
   ## Capture image then identify target objects.
   def use_camera(self):
-    (success, frame) = self.camera.read()
+    camera = VideoCapture(CAMERA_INDEX)
+    camera.set(3,WIDTH)
+    camera.set(4,HEIGHT)
+    (success, frame) = camera.read()
+    camera.release()
     raw = Image.fromarray(frame)
     BGR = raw.split()
     B = array(BGR[0].getdata(), dtype=float32)
     G = array(BGR[1].getdata(), dtype=float32)
     R = array(BGR[2].getdata(), dtype=float32)
-    NDI_G = ((BIAS)*G)/(R+B+MINIMUM_COLOR)
-    NDI_R = ((BIAS)*R)/(G+B+MINIMUM_COLOR)
-    NDI_B = ((BIAS)*B)/(R+G+MINIMUM_COLOR)
-    # Reshape
+    NDI_G = (BIAS*G + MINIMUM)/(R+B+MINIMUM_COLOR)
     green_image = NDI_G.reshape(HEIGHT,WIDTH)
-    blue_image = NDI_B.reshape(HEIGHT,WIDTH)
-    red_image = NDI_R.reshape(HEIGHT,WIDTH)
-    # Columns
     green_columns = green_image.sum(axis=0)
-    blue_columns = blue_image.sum(axis=0)
-    red_columns = red_image.sum(axis=0)
-    # Threshold
-    green_threshold = numpy.mean(green_columns) #+ numpy.std(green_columns)
-    red_threshold = numpy.mean(red_columns) #+ numpy.std(red_columns)
-    blue_threshold = numpy.mean(blue_columns) #+ numpy.std(blue_columns)
-    # Green
+    green_high = numpy.mean(green_columns) + numpy.std(green_columns)
+    green_low = numpy.mean(green_columns)
     x = 0
     self.green_objects = []
     while (x < WIDTH-1):
-      if (green_columns[x] > green_threshold):
+      if (green_columns[x] > green_high):
         start = x
-        while (green_columns[x] > green_threshold) and (x < WIDTH-1):
+        while (green_columns[x] > green_low) and (x < WIDTH-1):
           x += 1
         end = x
         size = (end - start)
         offset = (start + (end - start)/2) - CENTER
-        self.green_objects.append((size,offset))
+        if (size > MINIMUM_SIZE):
+          self.green_objects.append((size,offset,start,end))
       else:
         x += 1
-    # Red
-    x = 0
-    self.red_objects = []
-    while (x < WIDTH-1):
-      if (red_columns[x] > red_threshold):
-        start = x
-        while (red_columns[x] > red_threshold) and (x < WIDTH-1):
-          x += 1
-        end = x
-        size = (end - start)
-        offset = (start + (end - start)/2) - CENTER
-        self.red_objects.append((size,offset))
-      else:
-        x += 1
-    # Blue
-    x = 0
-    self.blue_objects = []
-    while (x < WIDTH-1):
-      if (blue_columns[x] > blue_threshold):
-        start = x
-        while (blue_columns[x] > blue_threshold) and (x < WIDTH-1):
-          x += 1
-        end = x
-        size = (end - start)
-        offset = (start + (end - start)/2) - CENTER # from center
-        self.blue_objects.append((size,offset))
-      else:
-        x += 1
+
+    # Display
+    for (size,offset,start,end) in self.green_objects:
+      for x in xrange(start,end):
+        for y in xrange(0,HEIGHT):
+          raw.putpixel((x,y), (254,254,254))   
+    raw.save("RAW.jpg", "JPEG")
+    p = subprocess.Popen(["display", "RAW.jpg"])
+    time.sleep(5)
+    p.kill()
 
   ## Connect to Server.
   def connect(self):
@@ -222,9 +202,11 @@ class Worker:
 
   ## Gather Logic
   def gather(self):
-    print('GATHERING')
+    self.goal = 'GATHERING'
     self.use_camera()
-    (size,offset) = max(self.green_objects)
+    (size,offset,start,end) = max(self.green_objects)
+    print('Detected Size:' + str(size))
+    print('Detected Offset:' + str(offset))
     if (offset > THRESHOLD) and (size > MINIMUM_SIZE):
       self.action = 'R'
       self.orientation += TURN #!
@@ -248,7 +230,7 @@ class Worker:
 
   ## Stack Logic
   def stack(self):
-    print('STACKING')
+    self.goal = 'STACKING'
     if (not (int(self.x) == ZONE_X and int(self.y) == ZONE_Y)):
       if (self.orientation > tan((ZONE_Y - self.y)/(ZONE_X - self.x)) + ERROR): #!
         self.action = 'L'
@@ -265,14 +247,24 @@ class Worker:
       self.stacked = True #!
 
   def return_home(self):
-    print('RETURNING')
-    self.action = 'F'
-    self.returned = True #!
+    self.goal = 'RETURNING'
+    if (not (int(self.x) == START_X and int(self.y) == START_Y)):
+      if (self.orientation > tan((START_Y - self.y)/(START_X - self.x)) + ERROR): #!
+        self.action = 'L'
+        self.orientation -= TURN
+      elif (self.orientation < tan((ZONE_Y - self.y)/(ZONE_X - self.x)) - ERROR): #!
+        self.action = 'R'
+        self.orientation += TURN
+      else:
+        self.action = 'F'
+        self.x += TRAVEL*cos(self.orientation) #!
+        self.y += TRAVEL*sin(self.orientation) #!
+    else:
+      self.action = 'W'
+      self.returned = True #!
 
   ## Execute action with arduino.
   def control_arduino(self):
-
-    print(time.time())
 
     ### Send
     try:
@@ -327,7 +319,7 @@ class Worker:
   def send_response(self):   
     try:
       print('Sending RESPONSE to Server ...')
-      json_response = json.dumps({'ACTION':self.action, 'ERROR':self.error, 'GATHERED':str(self.gathered)})
+      json_response = json.dumps({'ACTION':self.action, 'ERROR':self.error, 'GATHERED':str(self.gathered), 'GOAL':self.goal})
       self.connection.send(json_response)
       print(str(json_response))
       print("...Success.")

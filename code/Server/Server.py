@@ -58,9 +58,11 @@ class Server:
       action = parsed_response['ACTION']
       error = parsed_response['ERROR']
       gathered = parsed_response['GATHERED']
+      goal = parsed_response['GOAL']
       self.action_green.set_text(action)
       self.error_green.set_text(error)
       self.gathered_green.set_text(gathered)
+      self.goal_green.set_text(goal)
       print(str(json_response))
       print("...Success.")
     except socket.error as Error:
@@ -155,7 +157,7 @@ class Server:
     ### Window
     self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
     self.window.set_title("BOSS")
-    self.window.set_size_request(640, 300)
+    self.window.set_size_request(750, 300)
     self.window.connect("delete_event", self.close)
     self.window.set_border_width(10) 
 
@@ -166,7 +168,7 @@ class Server:
     self.label_app = gtk.Label("Task Progress: ")
     self.label_app.show()
     self.vbox_app.pack_start(self.label_app, False, False, 6)
-    self.table_layout = gtk.Table(rows=4, columns=6, homogeneous=True)
+    self.table_layout = gtk.Table(rows=4, columns=7, homogeneous=True)
 
     ### Labels
     self.label_name = gtk.Label("NAME")
@@ -187,6 +189,9 @@ class Server:
     self.label_error = gtk.Label("GATHERED")
     self.label_error.show()
     self.table_layout.attach(self.label_error, 5, 6, 0, 1, 0,0,0,0)
+    self.label_goal = gtk.Label("GOAL")
+    self.label_goal.show()
+    self.table_layout.attach(self.label_goal, 6, 7, 0, 1, 0,0,0,0)
 
     ### Red
     self.label_red = gtk.Label("RED")
@@ -207,6 +212,9 @@ class Server:
     self.gathered_red = gtk.Label("0")
     self.gathered_red.show()
     self.table_layout.attach(self.gathered_red, 5, 6, 1, 2, 0,0,0,0)
+    self.goal_red = gtk.Label("NONE")
+    self.goal_red.show()
+    self.table_layout.attach(self.goal_red, 6, 7, 1, 2, 0,0,0,0)
 
     ### Green
     self.label_green = gtk.Label("GREEN")
@@ -227,6 +235,9 @@ class Server:
     self.gathered_green = gtk.Label("0")
     self.gathered_green.show()
     self.table_layout.attach(self.gathered_green, 5, 6, 2, 3, 0,0,0,0)
+    self.goal_green = gtk.Label("NONE")
+    self.goal_green.show()
+    self.table_layout.attach(self.goal_green, 6, 7, 2, 3, 0,0,0,0)
 
     ### Blue
     self.label_blue = gtk.Label("BLUE")
@@ -247,6 +258,9 @@ class Server:
     self.gathered_blue = gtk.Label("0")
     self.gathered_blue.show()
     self.table_layout.attach(self.gathered_blue, 5, 6, 3, 4, 0,0,0,0)
+    self.goal_blue = gtk.Label("NONE")
+    self.goal_blue.show()
+    self.table_layout.attach(self.goal_blue, 6, 7, 3, 4, 0,0,0,0)
 
     ### Total
     self.table_layout.show()

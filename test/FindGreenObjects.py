@@ -13,14 +13,16 @@ import subprocess
 RATE = 60 # 5 volt per 4096 Hz
 LEFT_PIN = 24
 RIGHT_PIN = 25
-CAMERA_INDEX = 1
-WIDTH = 160
-HEIGHT = 120
+CAMERA_INDEX = 0
+WIDTH = 640
+HEIGHT = 480
 CENTER = WIDTH/2
 THRESHOLD = 10
 RANGE = 80
-BIAS = 10
-MINIMUM = 5
+BIAS = 10.0
+MINIMUM = 1.0
+MINIMUM_SIZE = 10
+MINIMUM_DISTANCE = 10
 
 ### Setup
 camera = VideoCapture(CAMERA_INDEX)
@@ -33,22 +35,23 @@ BGR = raw.split()
 B = array(BGR[0].getdata(), dtype=float32)
 G = array(BGR[1].getdata(), dtype=float32)
 R = array(BGR[2].getdata(), dtype=float32)
-NDI = (BIAS*G)/(R+B) # convert to normalized difference index
+NONTARGET = B + R + MINIMUM
+TARGET = BIAS*G
+NDI = (TARGET)/(NONTARGET) # convert to normalized difference index
 RNDI = NDI.reshape(HEIGHT,WIDTH) # rows by columns
 columns = RNDI.sum(axis=0)
 rows = RNDI.sum(axis=1)
 
 # Determine Objects
-xgreener = numpy.mean(columns) + numpy.std(columns)
 x = 0
 xsizes = []
 xoffsets = []
 xstarts = []
 xends = []
 while (x < WIDTH-1):
-  if (columns[x] > xgreener):
+  if (columns[x] > (numpy.mean(columns) + numpy.std(columns))):
     start = x
-    while (columns[x] > xgreener) and (x < WIDTH-1):
+    while (columns[x] > numpy.mean(columns)) and (x < WIDTH-1):
       x += 1
     end = x
     size = (end - start)
@@ -59,19 +62,6 @@ while (x < WIDTH-1):
     xends.append(end)
   else:
     x += 1
-
-print('UNCONSOLIDATED')
-print('xstarts' + str(xstarts))
-print('xends' + str(xends))    
-for i in xrange(1,(len(xsizes)-2)):
-  if ((xstarts[i] - xends[i-1]) < MINIMUM):
-    size = xsizes.pop(i+1)
-    offset = xoffsets.pop(i+1)
-    start = xstarts.pop(i+1)
-    end = xends.pop(i+1)   
-    xsizes[i] += size + MINIMUM
-    xends[i] += size + MINIMUM
-    xoffsets[i] += (xstarts[i] + (xends[i] - xstarts[i])/2)
 
 print('CONSOLIDATED')
 print('xstarts' + str(xstarts))
