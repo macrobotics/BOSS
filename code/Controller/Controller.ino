@@ -10,23 +10,29 @@
   2: Object Too Far
   3: Load Failed
   4: Bad Action
+  
 */
 
 /* --- Headers --- */
 #include "SoftwareSerial.h"
 #include "stdio.h"
 #include "Servo.h"
+#include <AFMotor.h>
+#define STEPPER_MOTOR 2
+#define STEPPER_STEPS 48
+#define STEPPER_RPM 10
 #define RIGHT_SERVO_PIN 10
 #define LEFT_SERVO_PIN 9
-#define LOAD_SERVO_PIN 4 
-#define ACTUATOR1_PWM_PIN 7 // Blue wire
-#define ACTUATOR2_PWM_PIN 8 // Blue wire
+#define STEPPER_LOAD 100
+#define STEPPER_MOTOR 1 // PWM3, PWM11, D4, D7, D8 and D12
+#define ACTUATOR1_PWM_PIN 5 // Blue wire
+#define ACTUATOR2_PWM_PIN 6 // Blue wire
 #define ACTUATOR1_POSITION_PIN A0 // Purple wire
 #define ACTUATOR2_POSITION_PIN A1 // Purple wire
-#define ULTRASONIC_PIN 3
+#define ULTRASONIC_PIN 2
 #define BAUD 9600
-#define RANGE_GRAB 20
-#define RANGE_MOVE 40
+#define RANGE_GRAB 20 // minimum distance (cm) to grab object
+#define RANGE_MOVE 40 // minimum distance (cm) to object if moving
 #define TIME_WAIT 250
 #define TIME_LEFT 500
 #define TIME_RIGHT 1000
@@ -49,8 +55,8 @@ const char ERROR_CLOSE = '1';
 const char ERROR_FAR = '2';
 const char ERROR_LOAD = '3';
 const char ERROR_ACTION = '4';
-const char FORWARD = 'F';
-const char BACKWARD = 'B';
+const char MOVE_FORWARD = 'F';
+const char MOVE_BACKWARD = 'B';
 const char LEFT = 'L';
 const char RIGHT = 'R';
 const char GRAB = 'G';
@@ -60,16 +66,15 @@ char action;
 char error;
 Servo left_servo;
 Servo right_servo;
-Servo load_servo;
+AF_Stepper stepper(STEPPER_STEPS, STEPPER_MOTOR);
 
 /* --- Setup --- */
 void setup() {
   left_servo.attach(LEFT_SERVO_PIN);
   right_servo.attach(RIGHT_SERVO_PIN);
-  load_servo.attach(LOAD_SERVO_PIN);
   left_servo.write(CR_SERVO_STOP);
   right_servo.write(CR_SERVO_STOP);
-  load_servo.write(S_SERVO_RESET);
+  stepper.setSpeed(STEPPER_RPM);
   Serial.begin(BAUD);
 }
 
@@ -77,10 +82,10 @@ void setup() {
 void loop() {
   action = Serial.read();
   switch(action) {
-    case FORWARD:
+    case MOVE_FORWARD:
       error = forward();
       break;
-    case BACKWARD:
+    case MOVE_BACKWARD:
       error = backward();
       break;
     case LEFT:
@@ -174,14 +179,14 @@ char right() {
 // Grab bale
 char grab() {
   if (ping() < RANGE_GRAB) {
-    load_servo.write(S_SERVO_LOAD); // Load bale with servo.
+    stepper.step(STEPPER_LOAD, FORWARD, DOUBLE);
     delay(TIME_LOAD);
-    load_servo.write(S_SERVO_RESET); // Reset arm position.
+    stepper.step(STEPPER_LOAD, BACKWARD, DOUBLE); // Reset arm position.
     if (ping() < RANGE_GRAB) {
       return ERROR_LOAD;
     }
     else {
-      load_servo.write(S_SERVO_RESET);; // Dejectedly reset arm position.
+      stepper.step(STEPPER_LOAD, BACKWARD, DOUBLE); // Dejectedly reset arm position.
       return ERROR_NONE; // Load Failed
     }
   }

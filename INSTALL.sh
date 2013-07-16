@@ -18,7 +18,7 @@ sudo cp config/interfaces /etc/network/
 sudo mv /etc/hosts /etc/hosts.backup
 sudo cp config/hosts /etc
 
-# Configure Configure
+# Configure Controller
 sudo cp config/avrdude /usr/bin/avrdude
 sudo cp config/avrdude /usr/share/arduino/hardware/tools
 sudo cp config/avrdude.conf  /usr/share/arduino/hardware/tools
@@ -29,4 +29,12 @@ sudo cp config/80-alamode.rules /etc/udev/rules.d
 sudo chown root /usr/bin/avrdude /usr/share/arduino/hardware/tools/avrdude
 sudo chgrp root /usr/bin/avrdude /usr/share/arduino/hardware/tools/avrdude
 sudo chmod a+s /usr/bin/avrdude /usr/share/arduino/hardware/tools/avrdude
+sudo mv libraries/AFMotor /usr/share/arduino/libraries
+
+# Configure Start-on-Boot
+sudo mv /etc/rc.local /etc/rc.local.backup
+sudo cp config/rc.local /etc/
+sudo mv code/Worker/Worker.py /usr/bin/
+sudo chmod +x /usr/bin/Worker.py
+
 
