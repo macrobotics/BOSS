@@ -10,7 +10,6 @@
   2: Object Too Far
   3: Load Failed
   4: Bad Action
-  
 */
 
 /* --- Headers --- */
@@ -48,6 +47,16 @@
 #define CR_SERVO_STOP 100
 #define S_SERVO_RESET 0
 #define S_SERVO_LOAD 180
+
+/* --- Prototypes --- */
+char forward(void);
+char backward(void);
+char left(void);
+char right(void);
+char grab(void);
+char stack(void);
+long ping(void);
+char wait(void);
 
 /* --- Declarations --- */
 const char ERROR_NONE = '0';
