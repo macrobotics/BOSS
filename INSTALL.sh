@@ -5,7 +5,7 @@ sudo apt-get update && sudo apt-get upgrade
 sudo apt-get install build-essential -y
 sudo apt-get install python python-imaging python-opencv python-numpy python-serial -y
 sudo apt-get install git-core -y
-sudo apt-get install arduino -y
+sudo apt-get install arduino arduino-mk -y
 sudo apt-get install minicom -y
 
 # Configure Git
@@ -36,5 +36,3 @@ sudo mv /etc/rc.local /etc/rc.local.backup
 sudo cp config/rc.local /etc/
 sudo mv code/Worker/Worker.py /usr/bin/
 sudo chmod +x /usr/bin/Worker.py
-
-

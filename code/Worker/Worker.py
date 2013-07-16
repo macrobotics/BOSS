@@ -20,8 +20,8 @@ import ast
 import subprocess
 
 # Setup
-ADDRESS_IN = ('localhost',50000)
-ADDRESS_OUT = ('localhost',50001)
+ADDRESS_IN = ('localhost',50000) # 10.42.0.1
+ADDRESS_OUT = ('localhost',50001) # 10.42.0.3
 BUFFER_SIZE = 4096
 QUEUE_MAX = 5
 BAUD = 9600
@@ -53,6 +53,7 @@ ERROR_ACTION = 4
 
 # Class Worker
 class Worker:
+
   ## Initialize Worker robot.
   def __init__(self):
 #    try:
@@ -154,7 +155,7 @@ class Worker:
         pass
       try:
         print('Establishing RECEIVE Port from Server...')
-        self.socket_in = socket.socket(AF_INET,SOCK_STREAM) # tmp socket
+        self.socket_in = socket.socket(AF_INET,SOCK_STREAM)
         self.socket_in.connect((ADDRESS_IN))
         self.connected_in = True
         print('...Success.')
