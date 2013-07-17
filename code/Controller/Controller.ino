@@ -118,7 +118,7 @@ void loop() {
   if (error != ERROR_ACTION) {
     Serial.flush();
     delay(TIME_WAIT);
-    Serial.println(error);
+    Serial.println(0); // Serial.println(error);
   }
   else {
     Serial.flush();

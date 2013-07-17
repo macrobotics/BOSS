@@ -8,8 +8,8 @@ from socket import *
 from numpy import *
 from PIL import Image 
 from cv2 import VideoCapture
-from cv import CaptureFromCAM, QueryFrame
 from time import *
+import cv2, cv
 import numpy
 import socket
 import time
@@ -27,15 +27,15 @@ QUEUE_MAX = 5
 BAUD = 9600
 DEVICE = '/dev/ttyACM0' # '/dev/ttyS0' for AlaMode, '/dev/ttyAMC0' for Uno
 CAMERA_INDEX = 0
-WIDTH = 640.0
-HEIGHT = 480.0
-CENTER = WIDTH/2.0
-THRESHOLD = CENTER/4.0
+CAMERA_WIDTH = 640.0
+CAMERA_HEIGHT = 480.0
+CAMERA_CENTER = CAMERA_WIDTH/2.0
+CAMERA_THRESHOLD = CAMERA_WIDTH/8.0
 ERROR = pi/32.0
-RANGE = WIDTH/1.5
+RANGE = CAMERA_WIDTH/1.5
 BIAS = 100.0
 MINIMUM_COLOR = 0.01
-MINIMUM_SIZE = WIDTH/32.0
+MINIMUM_SIZE = CAMERA_WIDTH/32.0
 MAX_CONNECTIONS = 5
 TURN = pi/16.0
 TRAVEL = 0.5
@@ -50,29 +50,35 @@ ERROR_CLOSE = 1
 ERROR_FAR = 2
 ERROR_LOAD = 3
 ERROR_ACTION = 4
+DP = 6 
+MIN_DISTANCE = 640
+EDGE_THRESHOLD = 40 # param1
+CENTER_THRESHOLD = 20 # param2
+MIN_RADIUS = 10
+MAX_RADIUS = 40
 
 # Class Worker
 class Worker:
 
   ## Initialize Worker robot.
   def __init__(self):
-#    try:
-#      print('Setting up Camera...')
-#      self.camera = VideoCapture(CAMERA_INDEX)
-#      self.camera.set(3,WIDTH)
-#      self.camera.set(4,HEIGHT)
-#      self.camera
-#      print('...Success.')
-#    except Exception:
-#     print('...Failure.')
     try:
-      print('Setting up Controller...')
-      self.arduino = serial.Serial(DEVICE, BAUD)
-      print('...Success.')
+      self.camera = VideoCapture(CAMERA_INDEX)
+      self.camera.set(3,CAMERA_WIDTH)
+      self.camera.set(4,CAMERA_HEIGHT)
+      message = 'Success.'
     except Exception:
-      print('...Failure.')
+      message = 'Failure.'
+    print('[Setting up Camera]...' + message)
+
     try:
-      print('Initializing Worker...')
+      self.arduino = serial.Serial(DEVICE, BAUD)
+      message = 'Success.'
+    except Exception:
+      message = 'Failure.'
+    print('[Setting up Controller]...' + message)
+
+    try:
       self.connected_out = False
       self.connected_in = False
       self.command = None
@@ -81,104 +87,114 @@ class Worker:
       self.error = None
       self.error_number = None
       self.previous_actions = []
-      self.green_objects = []
-      self.red_objects = []
-      self.blue_objects = []
+      self.objects = []
       self.gathered = 0
       self.stacked = False
       self.returned = False
       self.x = 0
       self.y = 0
       self.orientation = 0
-      print('...Success.')
+      message = 'Success.'
     except Exception:
-      print('...Failure.')
+      message = 'Failure.'
+    print('[Initializing Worker]...' + message)
 
   ## Capture image then identify target objects.
   def use_camera(self):
-    camera = VideoCapture(CAMERA_INDEX)
-    camera.set(3,WIDTH)
-    camera.set(4,HEIGHT)
-    (success, frame) = camera.read()
-    camera.release()
+    for cache in range(10):
+      (success, frame) = self.camera.read()
     raw = Image.fromarray(frame)
     BGR = raw.split()
     B = array(BGR[0].getdata(), dtype=float32)
     G = array(BGR[1].getdata(), dtype=float32)
     R = array(BGR[2].getdata(), dtype=float32)
-    NDI_G = (BIAS*G + MINIMUM)/(R+B+MINIMUM_COLOR)
-    green_image = NDI_G.reshape(HEIGHT,WIDTH)
-    green_columns = green_image.sum(axis=0)
-    green_high = numpy.mean(green_columns) + numpy.std(green_columns)
-    green_low = numpy.mean(green_columns)
+    NDI_G = (BIAS*G + MINIMUM_COLOR)/(R + B + MINIMUM_COLOR)
+    matrix = NDI_G.reshape(CAMERA_HEIGHT,CAMERA_WIDTH)
+    columns = matrix.sum(axis=0)
+    high = numpy.mean(columns) + numpy.std(columns)
+    low = numpy.mean(columns)
     x = 0
-    self.green_objects = []
-    while (x < WIDTH-1):
-      if (green_columns[x] > green_high):
+    self.objects = []
+    while (x < CAMERA_WIDTH-1):
+      if (columns[x] > high):
         start = x
-        while (green_columns[x] > green_low) and (x < WIDTH-1):
+        while (columns[x] > low) and (x < CAMERA_WIDTH-1):
           x += 1
         end = x
         size = (end - start)
-        offset = (start + (end - start)/2) - CENTER
+        offset = (start + (end - start)/2) - CAMERA_CENTER
         if (size > MINIMUM_SIZE):
-          self.green_objects.append((size,offset,start,end))
+          self.objects.append((size,offset))
       else:
         x += 1
 
-    # Display
-    for (size,offset,start,end) in self.green_objects:
-      for x in xrange(start,end):
-        for y in xrange(0,HEIGHT):
-          raw.putpixel((x,y), (254,254,254))   
-    raw.save("RAW.jpg", "JPEG")
-    p = subprocess.Popen(["display", "RAW.jpg"])
-    time.sleep(5)
-    p.kill()
+  ## Is Oriented? --> Boolean
+  def is_oriented(self):
+    for cache in range(10):
+      (success, frame) = self.camera.read()
+    grayscale = cv2.cvtColor(frame, cv.CV_BGR2GRAY)
+    blurred = cv2.GaussianBlur(grayscale, (0,0), 5) # (0,0), 5
+    colored = cv2.cvtColor(blurred,cv2.COLOR_GRAY2BGR)
+    (flag, thresholded) = cv2.threshold(blurred, 50, 255, cv2.THRESH_BINARY) # 50 and 255 WORKS
+    circles = cv2.HoughCircles(thresholded,cv2.cv.CV_HOUGH_GRADIENT,DP,MIN_DISTANCE,param1=EDGE_THRESHOLD, param2=CENTER_THRESHOLD, minRadius=MIN_RADIUS,maxRadius=MAX_RADIUS)
+    try:
+      for target in circles[0,:]:
+        x = target[0]
+        y = target[1]
+        r = target[2]
+        print(x)
+        cv2.circle(colored,(x,y),r,(255,0,0),1)
+        cv2.circle(colored,(x,y),2,(0,0,255),3)
+        cv2.imshow('DETECTED', colored)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+      if (abs(CAMERA_CENTER - x) > CAMERA_THRESHOLD):  
+        return False
+      else:
+        return True
+    except TypeError:
+      print('Not Oriented')
+      return False
 
   ## Connect to Server.
   def connect(self):
     if (self.connected_out == False) and (self.connected_in == False):
       try:
-        print('Establishing SEND Port to Server...')
         self.socket_out = socket.socket(AF_INET, SOCK_STREAM)
         self.socket_out.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket_out.bind((ADDRESS_OUT))
         self.socket_out.listen(QUEUE_MAX)
         (self.connection,self.address) = self.socket_out.accept()
         self.connected_out = True
-        print('...Success.')
+        message = 'Success.'
       except socket.error as SocketError:
-        print('...Failure')
+        message = 'Failure.'
         self.connected_out = False
         self.socket_out.close()
         pass
+      print('[Establishing Send Port]...' + message)
       try:
-        print('Establishing RECEIVE Port from Server...')
         self.socket_in = socket.socket(AF_INET,SOCK_STREAM)
         self.socket_in.connect((ADDRESS_IN))
         self.connected_in = True
-        print('...Success.')
+        message = 'Success.'
       except socket.error as error:
         self.socket_in.close()
         self.connected_in = False
-        print('...Failure.')
+        message = 'Failure.'
         pass
-    else:
-      print('ALREADY CONNECTED')
+      print('[Establishing Receive Port]...' + message)
   
   ## Receives COMMAND from Server.
   def receive_command(self):
     try: 
-      print('Receiving COMMAND from Server...')
       json_command = self.socket_in.recv(BUFFER_SIZE)
       dict_command = json.loads(json_command)
       self.command = dict_command['COMMAND']
-      print(str(json_command))
-      print('...Success.')
+      message = str(json_command)
     except socket.error as SocketError:
-      print('...Connection Failure.')
-
+      message = 'Connection Failure.'
+    print('[Receiving COMMAND]...' + message)
   ## After receiving COMMAND, determine action.
   def decide_action(self):
     if (self.command == 'START') or (self.command == 'CONTINUE'):
@@ -198,36 +214,47 @@ class Worker:
       self.action = 'W'
       self.disconnect()
     else:
-      self.action = 'UNKNOWN'
-    self.previous_actions.append(self.action)
+      self.action = 'W'
 
   ## Gather Logic
   def gather(self):
+    print('--------------------------')
     self.goal = 'GATHERING'
     self.use_camera()
-    (size,offset,start,end) = max(self.green_objects)
-    print('Detected Size:' + str(size))
-    print('Detected Offset:' + str(offset))
-    if (offset > THRESHOLD) and (size > MINIMUM_SIZE):
-      self.action = 'R'
-      self.orientation += TURN #!
-    elif (offset < -THRESHOLD) and (size > MINIMUM_SIZE):
-      self.action = 'L'
-      self.orientation -= TURN #!
-    elif (size > MINIMUM_SIZE):
-      if (size > RANGE):
-        self.action = 'G'
-        self.gathered += 1 #!
-      elif (not self.error_number == ERROR_CLOSE):
-        self.action = 'F'
-        self.x += TRAVEL*cos(self.orientation) #!
-        self.y += TRAVEL*sin(self.orientation) #!
-      else:
+    try:
+      (size, offset) = max(self.objects)
+      print('Detected Size:' + str(size))
+      print('Detected Offset:' + str(offset))
+      if (offset > CAMERA_THRESHOLD):
+        print('Target to Right')
         self.action = 'R'
         self.orientation += TURN #!
-    else:
+      elif (offset < -CAMERA_THRESHOLD):
+        print('Target to Left')
+        self.action = 'L'
+        self.orientation -= TURN #!
+      elif (self.is_oriented()):
+        if (size > RANGE):
+          print('Target in Grab Range')
+          self.action = 'G'
+          self.gathered += 1 #!
+        elif (not self.error_number == ERROR_CLOSE):
+          print('Target out of Grab Range')
+          self.action = 'F'
+          self.x += TRAVEL*cos(self.orientation) #!
+          self.y += TRAVEL*sin(self.orientation) #!
+        else:
+          print('Object in Way')
+          self.action = 'R'
+          self.orientation += TURN #!
+      else:
+        print('Target Not Oriented')
+        self.action = 'R'
+        self.orientation += TURN #!
+    except ValueError:
+      print('No Objects Detected')
       self.action = 'R'
-      self.orientation += TURN #!
+    print('--------------------------')
 
   ## Stack Logic
   def stack(self):
@@ -269,34 +296,32 @@ class Worker:
 
     ### Send
     try:
-      print('Sending ACTION to Controller...')
-      print(self.action)
       self.arduino.write(self.action)
-      print('...Success.')
+      message = 'Success.'
     except Exception:
-      print('...Failure.')
+      message = 'Failure.'
+    print('[Sending ACTION]...' + message)
 
     ### Receive
     try:
-      print('Receiving ERROR from Controller...')
       self.error_number = int(self.arduino.readline())
-      print(self.error_number)
-      print('...Success.')
+      message = str(self.error_number)
     except ValueError:
       self.error_number = ERROR_PARSE
-      print("ValueError: Failed to parse signal, retrying...")
+      message = "ValueError: Failed to parse signal, retrying..."
     except OSError:
       self.error_number = ERROR_CONNECTION
-      print("OSError: Connection lost, retrying...")
+      message = "OSError: Connection lost, retrying..."
     except SerialException:
       self.error_number = ERROR_CONNECTION
-      print("Serial Exception: Connection lost, retrying...")
+      message = "Serial Exception: Connection lost, retrying..."
     except SyntaxError:
       self.error_number = ERROR_PARSE
-      print("Syntax Error: Failed to parse signal, retrying...")
+      message = "Syntax Error: Failed to parse signal, retrying..."
     except KeyError:
       self.error_number = ERROR_PARSE
-      print("KeyError: Failed to parse signal, retrying...")
+      message = 'KeyError: Failed to parse signal, retrying...'
+    print('[Receiving ERROR from Controller]...' + message)
 
   ## Handle Errors from Arduino
   def handle_error(self):
@@ -315,31 +340,31 @@ class Worker:
       self.error = 'BAD ACTION'
     else:
       self.error = 'UNKNOWN ERROR'
+    print('[Handling ERRORS]...' + self.error)
 
   ## Send RESPONSE to Server
   def send_response(self):   
     try:
-      print('Sending RESPONSE to Server ...')
       json_response = json.dumps({'ACTION':self.action, 'ERROR':self.error, 'GATHERED':str(self.gathered), 'GOAL':self.goal})
       self.connection.send(json_response)
-      print(str(json_response))
-      print("...Success.")
+      message = str(json_response)
     except Exception:
-      print("...Failure.")
+      message = "Failure."
+    print('[Sending RESPONSE]...' + message)
 
   ## Disconnect from Server.
   def disconnect(self):
     try:
-      print('Disconnecting from Server...')
       self.socket_in.close()
       self.socket_out.close()
       self.connection.close()
       self.connected_in = False
       self.connected_out = False
-      print('...Success')
+      message = 'Success.'
     except Exception:
-      print('...Failure')
+      message = 'Failure.'
       pass
+    print('[Disconnecting]...' + message)
 
 # Main
 if __name__ == "__main__":
