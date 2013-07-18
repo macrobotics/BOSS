@@ -36,3 +36,7 @@ sudo mv /etc/rc.local /etc/rc.local.backup
 sudo cp config/rc.local /etc/
 sudo mv code/Worker/Worker.py /usr/bin/
 sudo chmod +x /usr/bin/Worker.py
+
+# Configure Camera
+sudo rmmod uvcvideo
+sudo modprobe uvcvideo nodrop=1 timeout=5000 quirks=0x80

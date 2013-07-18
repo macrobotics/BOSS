@@ -32,9 +32,9 @@
 #define BAUD 9600
 #define RANGE_GRAB 20 // minimum distance (cm) to grab object
 #define RANGE_MOVE 40 // minimum distance (cm) to object if moving
-#define TIME_WAIT 250
-#define TIME_LEFT 500
-#define TIME_RIGHT 1000
+#define TIME_WAIT 1000
+#define TIME_LEFT 250
+#define TIME_RIGHT 250
 #define TIME_STACK 3000
 #define TIME_REVERSE 3000
 #define TIME_FORWARD 3000
@@ -51,26 +51,36 @@
 /* --- Prototypes --- */
 char forward(void);
 char backward(void);
-char left(void);
-char right(void);
+char left(int val);
+char right(int val);
 char grab(void);
 char stack(void);
+char avoid(void);
+char circumnavigate(void);
 long ping(void);
 char wait(void);
 
-/* --- Declarations --- */
+/* --- Error Codes --- */
 const char ERROR_NONE = '0';
 const char ERROR_CLOSE = '1';
 const char ERROR_FAR = '2';
 const char ERROR_LOAD = '3';
 const char ERROR_ACTION = '4';
+
+/* --- Actions --- */
 const char MOVE_FORWARD = 'F';
 const char MOVE_BACKWARD = 'B';
 const char LEFT = 'L';
+const char FAR_LEFT = 'M';
 const char RIGHT = 'R';
+const char FAR_RIGHT = 'T';
 const char GRAB = 'G';
 const char STACK = 'S';
+const char AVOID = 'A';
+const char CIRCUMNAVIGATE = 'C';
 const char WAIT = 'W';
+
+/* --- Declarations ---*/
 char action;
 char error;
 Servo left_servo;
@@ -98,10 +108,16 @@ void loop() {
       error = backward();
       break;
     case LEFT:
-      error = left();
+      error = left(1);
+      break;
+    case FAR_LEFT:
+      error = left(2);
       break;
     case RIGHT:
-      error = right();
+      error = right(1);
+      break;
+    case FAR_RIGHT:
+      error = right(2);
       break;
     case GRAB:
       error = grab();
@@ -112,13 +128,16 @@ void loop() {
     case WAIT:
       error = wait();
       break;
+    case CIRCUMNAVIGATE:
+      error = circumnavigate();
+      break;
     default:
       error = ERROR_ACTION;
   }
   if (error != ERROR_ACTION) {
     Serial.flush();
     delay(TIME_WAIT);
-    Serial.println(0); // Serial.println(error);
+    Serial.println(error); // Serial.println(0);
   }
   else {
     Serial.flush();
@@ -154,10 +173,10 @@ char backward() {
 
 /* --- Left --- */
 // Turn to the left
-char left() {
+char left(int val) {
   right_servo.write(CR_SERVO_CW);
   left_servo.write(CR_SERVO_CW);
-  delay(TIME_LEFT);
+  delay(val*TIME_LEFT);
   right_servo.write(CR_SERVO_STOP);
   left_servo.write(CR_SERVO_STOP);
   if (ping() < RANGE_MOVE) {
@@ -170,10 +189,10 @@ char left() {
 
 /* --- Right --- */
 // Turn to the right
-char right() {
+char right(int val) {
   right_servo.write(CR_SERVO_CCW);
   left_servo.write(CR_SERVO_CCW);
-  delay(TIME_RIGHT);
+  delay(val*TIME_RIGHT);
   right_servo.write(CR_SERVO_STOP);
   left_servo.write(CR_SERVO_STOP);
   if (ping() < RANGE_MOVE) {
@@ -203,6 +222,7 @@ char grab() {
     return ERROR_FAR; // Object Too Far
   }
 }
+
 /* --- Stack --- */
 // Turn 180 and stack objects
 char stack() {
@@ -212,23 +232,72 @@ char stack() {
   delay(TIME_REVERSE);
   right_servo.write(CR_SERVO_STOP);
   left_servo.write(CR_SERVO_STOP);
-  
   // Raise rack
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MAX);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MAX);             
   delay(TIME_STACK);
-  
   // Move forward
   right_servo.write(CR_SERVO_CW);
   left_servo.write(CR_SERVO_CCW);
   delay(TIME_FORWARD);
   right_servo.write(CR_SERVO_STOP);
   left_servo.write(CR_SERVO_STOP);
-  
   // Lower rack
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MIN);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MIN);
   delay(TIME_STACK); 
+  return ERROR_NONE;
+}
+
+/* --- Avoid --- */
+char avoid() {
+  // Turn right
+  right_servo.write(CR_SERVO_CCW);
+  left_servo.write(CR_SERVO_CCW);
+  delay(TIME_RIGHT);
+  right_servo.write(CR_SERVO_STOP);
+  left_servo.write(CR_SERVO_STOP);
+  // Move forward
+  right_servo.write(CR_SERVO_CW);
+  left_servo.write(CR_SERVO_CCW);
+  delay(TIME_FORWARD);
+  right_servo.write(CR_SERVO_STOP);
+  left_servo.write(CR_SERVO_STOP);
+  // Turn Left
+  right_servo.write(CR_SERVO_CW);
+  left_servo.write(CR_SERVO_CW);
+  delay(TIME_LEFT);
+  right_servo.write(CR_SERVO_STOP);
+  left_servo.write(CR_SERVO_STOP);
+  // Move forward
+  right_servo.write(CR_SERVO_CW);
+  left_servo.write(CR_SERVO_CCW);
+  delay(TIME_FORWARD);
+  right_servo.write(CR_SERVO_STOP);
+  left_servo.write(CR_SERVO_STOP);
+  return ERROR_NONE;
+}
+
+/* --- Circumnavigate --- */
+char circumnavigate() {
+  // Turn right
+  right_servo.write(CR_SERVO_CCW);
+  left_servo.write(CR_SERVO_CCW);
+  delay(TIME_RIGHT);
+  right_servo.write(CR_SERVO_STOP);
+  left_servo.write(CR_SERVO_STOP);
+  // Move forward
+  right_servo.write(CR_SERVO_CW);
+  left_servo.write(CR_SERVO_CCW);
+  delay(TIME_FORWARD);
+  right_servo.write(CR_SERVO_STOP);
+  left_servo.write(CR_SERVO_STOP);
+  // Turn Left
+  right_servo.write(CR_SERVO_CW);
+  left_servo.write(CR_SERVO_CW);
+  delay(TIME_LEFT);
+  right_servo.write(CR_SERVO_STOP);
+  left_servo.write(CR_SERVO_STOP);
   return ERROR_NONE;
 }
 

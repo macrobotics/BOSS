@@ -1,4 +1,4 @@
-#define ULTRASONIC_PIN 3
+#define ULTRASONIC_PIN 2
 #define BAUD 9600
 
 /* --- Setup --- */

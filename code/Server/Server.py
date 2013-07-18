@@ -15,11 +15,11 @@ import time
 
 # Global
 GREEN_SEND = ('', 50000)
-GREEN_RECEIVE = ('localhost', 50001)
+GREEN_RECEIVE = ('10.42.0.3', 50001)
 RED_SEND = ('', 60000)
-RED_RECEIVE = ('localhost', 60001)
+RED_RECEIVE = ('10.42.0.2', 60001)
 BLUE_SEND = ('', 70000)
-BLUE_RECEIVE = ('localhost', 70001)
+BLUE_RECEIVE = ('10.42.0.4', 70001)
 BUFFER_SIZE = 4096
 QUEUE_MAX = 5
 
@@ -137,7 +137,8 @@ class Server:
       except socket.error as msg:
         self.green_socket_out.close()
         self.green_connected_out = False
-        passprint('...Failure')
+        print('...Failure')
+        pass
       self.status_green.set_text('CONNECTED')
     else:
       print('ALREADY CONNECTED')

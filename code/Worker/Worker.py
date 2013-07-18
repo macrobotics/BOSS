@@ -20,15 +20,15 @@ import ast
 import subprocess
 
 # Setup
-ADDRESS_IN = ('localhost',50000) # 10.42.0.1
-ADDRESS_OUT = ('localhost',50001) # 10.42.0.3
+ADDRESS_IN = ('10.42.0.1',50000) # 10.42.0.1
+ADDRESS_OUT = ('10.42.0.3',50001) # 10.42.0.3
 BUFFER_SIZE = 4096
 QUEUE_MAX = 5
 BAUD = 9600
-DEVICE = '/dev/ttyACM0' # '/dev/ttyS0' for AlaMode, '/dev/ttyAMC0' for Uno
+DEVICE = '/dev/ttyS0' # '/dev/ttyS0' for AlaMode, '/dev/ttyAMC0' for Uno
 CAMERA_INDEX = 0
-CAMERA_WIDTH = 640.0
-CAMERA_HEIGHT = 480.0
+CAMERA_WIDTH = 320.0
+CAMERA_HEIGHT = 240.0
 CAMERA_CENTER = CAMERA_WIDTH/2.0
 CAMERA_THRESHOLD = CAMERA_WIDTH/8.0
 ERROR = pi/32.0
@@ -51,11 +51,11 @@ ERROR_FAR = 2
 ERROR_LOAD = 3
 ERROR_ACTION = 4
 DP = 6 
-MIN_DISTANCE = 640
+MIN_DISTANCE = CAMERA_CENTER
 EDGE_THRESHOLD = 40 # param1
 CENTER_THRESHOLD = 20 # param2
 MIN_RADIUS = 10
-MAX_RADIUS = 40
+MAX_RADIUS = 20
 
 # Class Worker
 class Worker:
@@ -86,8 +86,6 @@ class Worker:
       self.action = None
       self.error = None
       self.error_number = None
-      self.previous_actions = []
-      self.objects = []
       self.gathered = 0
       self.stacked = False
       self.returned = False
@@ -100,7 +98,9 @@ class Worker:
     print('[Initializing Worker]...' + message)
 
   ## Capture image then identify target objects.
-  def use_camera(self):
+  def detect_objects(self):
+    objects = []
+    x = 0
     for cache in range(10):
       (success, frame) = self.camera.read()
     raw = Image.fromarray(frame)
@@ -113,8 +113,6 @@ class Worker:
     columns = matrix.sum(axis=0)
     high = numpy.mean(columns) + numpy.std(columns)
     low = numpy.mean(columns)
-    x = 0
-    self.objects = []
     while (x < CAMERA_WIDTH-1):
       if (columns[x] > high):
         start = x
@@ -124,9 +122,10 @@ class Worker:
         size = (end - start)
         offset = (start + (end - start)/2) - CAMERA_CENTER
         if (size > MINIMUM_SIZE):
-          self.objects.append((size,offset))
+          objects.append((size,offset))
       else:
         x += 1
+    return objects
 
   ## Is Oriented? --> Boolean
   def is_oriented(self):
@@ -142,12 +141,6 @@ class Worker:
         x = target[0]
         y = target[1]
         r = target[2]
-        print(x)
-        cv2.circle(colored,(x,y),r,(255,0,0),1)
-        cv2.circle(colored,(x,y),2,(0,0,255),3)
-        cv2.imshow('DETECTED', colored)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
       if (abs(CAMERA_CENTER - x) > CAMERA_THRESHOLD):  
         return False
       else:
@@ -195,14 +188,18 @@ class Worker:
     except socket.error as SocketError:
       message = 'Connection Failure.'
     print('[Receiving COMMAND]...' + message)
+
   ## After receiving COMMAND, determine action.
   def decide_action(self):
     if (self.command == 'START') or (self.command == 'CONTINUE'):
       if (self.gathered < 4):
+        self.goal = 'GATHERING'
         self.gather()
       elif (not self.stacked):
+        self.goal = 'STACKING'
         self.stack()
       elif (not self.returned):
+        self.goal = 'RETURNING'
         self.return_home()
       else:
         self.action = 'W'
@@ -218,47 +215,52 @@ class Worker:
 
   ## Gather Logic
   def gather(self):
-    print('--------------------------')
-    self.goal = 'GATHERING'
-    self.use_camera()
+    objects = self.detect_objects()
     try:
-      (size, offset) = max(self.objects)
-      print('Detected Size:' + str(size))
-      print('Detected Offset:' + str(offset))
+      (size, offset) = max(objects)
       if (offset > CAMERA_THRESHOLD):
-        print('Target to Right')
-        self.action = 'R'
-        self.orientation += TURN #!
+        if (offset > 2*CAMERA_THRESHOLD):
+          message = 'Target to Far Right'
+          self.action = 'T'
+          self.orientation += TURN #!
+        else:
+          message = 'Target to Right'
+          self.action = 'R'
+          self.orientation += TURN #!
       elif (offset < -CAMERA_THRESHOLD):
-        print('Target to Left')
-        self.action = 'L'
-        self.orientation -= TURN #!
+        if (offset < -2*CAMERA_THRESHOLD):
+          message = 'Target to Far Left'
+          self.action = 'M'
+          self.orientation -= TURN #!
+        else:
+          message = 'Target to Left'
+          self.action = 'L'
+          self.orientation += TURN #!
       elif (self.is_oriented()):
         if (size > RANGE):
-          print('Target in Grab Range')
+          message = 'Target in Grab Range'
           self.action = 'G'
           self.gathered += 1 #!
         elif (not self.error_number == ERROR_CLOSE):
-          print('Target out of Grab Range')
+          message = 'Target out of Grab Range'
           self.action = 'F'
           self.x += TRAVEL*cos(self.orientation) #!
           self.y += TRAVEL*sin(self.orientation) #!
         else:
-          print('Object in Way')
+          message = 'Object in Way'
           self.action = 'R'
           self.orientation += TURN #!
       else:
-        print('Target Not Oriented')
+        message = 'Target Not Oriented'
         self.action = 'R'
         self.orientation += TURN #!
     except ValueError:
-      print('No Objects Detected')
-      self.action = 'R'
-    print('--------------------------')
+      message = 'No Objects Detected'
+      self.action = 'W'
+    print('[Deciding Action]...' + self.goal + '...' + message)
 
   ## Stack Logic
   def stack(self):
-    self.goal = 'STACKING'
     if (not (int(self.x) == ZONE_X and int(self.y) == ZONE_Y)):
       if (self.orientation > tan((ZONE_Y - self.y)/(ZONE_X - self.x)) + ERROR): #!
         self.action = 'L'
@@ -275,7 +277,6 @@ class Worker:
       self.stacked = True #!
 
   def return_home(self):
-    self.goal = 'RETURNING'
     if (not (int(self.x) == START_X and int(self.y) == START_Y)):
       if (self.orientation > tan((START_Y - self.y)/(START_X - self.x)) + ERROR): #!
         self.action = 'L'
@@ -297,7 +298,7 @@ class Worker:
     ### Send
     try:
       self.arduino.write(self.action)
-      message = 'Success.'
+      message = self.action
     except Exception:
       message = 'Failure.'
     print('[Sending ACTION]...' + message)
