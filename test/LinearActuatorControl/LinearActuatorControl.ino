@@ -27,10 +27,10 @@
 
 // These constants won't change.  They're used to give names
 // to the pins used:
-const int analogInPin1 = A0;  // Analog input pin that the potentiometer is attached to
-const int analogOutPin1 = 10; // Analog output pin that the LED is attached to
-const int analogInPin2 = A1;  // Analog input pin that the potentiometer is attached to
-const int analogOutPin2 = 9;
+const int analogInPin1 = A4;  // Analog input pin that the potentiometer is attached to
+const int analogOutPin1 = 5; // Analog output pin that the LED is attached to
+const int analogInPin2 = A5;  // Analog input pin that the potentiometer is attached to
+const int analogOutPin2 = 6;
 
 int sensorValue1 = 0;        // value read from the pot
 int sensorValue2 = 0;

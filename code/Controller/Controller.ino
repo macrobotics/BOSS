@@ -24,8 +24,8 @@
 #define LOAD_SERVO_PIN 11
 #define ACTUATOR1_PWM_PIN 5 // Blue wire
 #define ACTUATOR2_PWM_PIN 6 // Blue wire
-#define ACTUATOR1_POSITION_PIN A0 // Purple wire
-#define ACTUATOR2_POSITION_PIN A1 // Purple wire
+#define ACTUATOR1_POSITION_PIN A4 // Purple wire
+#define ACTUATOR2_POSITION_PIN A5 // Purple wire
 #define ULTRASONIC_PIN 8
 #define BAUD 9600
 #define RANGE_GRAB 20 // maximum distance (cm) to grab object
@@ -40,7 +40,7 @@
 #define TIME_BACKWARD 2000
 #define TIME_STEP 100
 #define TIME_DEGREE 15
-#define ACTUATOR_MAX 250
+#define ACTUATOR_MAX 220
 #define ACTUATOR_MIN 0
 #define CR_SERVO_CCW 50
 #define CR_SERVO_CW 150
