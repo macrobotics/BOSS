@@ -126,7 +126,7 @@ class Server:
         self.green_connected_in = False
         pass
       try:
-        print("Establishing SEND port to Green Worker...")
+        print("[Establishing SEND port to Green Worker]...")
         self.green_socket_out = socket.socket(AF_INET,SOCK_STREAM)
         self.green_socket_out.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.green_socket_out.bind((GREEN_SEND))
@@ -137,7 +137,7 @@ class Server:
       except socket.error as msg:
         self.green_socket_out.close()
         self.green_connected_out = False
-        print('...Failure')
+        print(msg)
         pass
       self.status_green.set_text('CONNECTED')
     else:

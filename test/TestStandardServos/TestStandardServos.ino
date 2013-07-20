@@ -11,25 +11,24 @@
 #define BAUD 9600
 
 /* --- Declarations --- */
-Servo left_servo;
-Servo right_servo;
+Servo load_servo;
 
 /* --- Setup --- */
 void setup() {
-  left_servo.attach(9);
-  right_servo.attach(10);
+  load_servo.attach(9);
   Serial.begin(BAUD);
 }
 
 /* --- Loop --- */
 void loop() {
-  left_servo.write(90);
-  right_servo.write(90);
-  delay(1000);
-  left_servo.write(0);
-  right_servo.write(0);
-  delay(1000);
-  left_servo.write(180);
-  right_servo.write(180);
-  delay(1000);
+  int maxima = 180;
+  int minima = 10;
+  for (int degree = minima; degree < maxima; degree++) {
+    load_servo.write(degree);
+    delay(15);
+  }
+  for (int degree = maxima; degree > minima; degree--) {
+    load_servo.write(degree);
+    delay(15);
+  }
 }

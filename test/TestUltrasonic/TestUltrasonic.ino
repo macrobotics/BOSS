@@ -1,4 +1,4 @@
-#define ULTRASONIC_PIN 2
+#define ULTRASONIC_PIN 8
 #define BAUD 9600
 
 /* --- Setup --- */
@@ -22,6 +22,6 @@ long ping() {
   delayMicroseconds(5);
   digitalWrite(ULTRASONIC_PIN, LOW);
   pinMode(ULTRASONIC_PIN, INPUT);
-  centimeters = pulseIn(ULTRASONIC_PIN, HIGH) / 29 / 2;
+  centimeters = pulseIn(ULTRASONIC_PIN, HIGH) / 28 / 2;
   return centimeters;
 }

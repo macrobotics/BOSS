@@ -32,10 +32,9 @@ sudo chmod a+s /usr/bin/avrdude /usr/share/arduino/hardware/tools/avrdude
 sudo mv libraries/AFMotor /usr/share/arduino/libraries
 
 # Configure Start-on-Boot
+cp code/Worker/Worker.py /home/pi
 sudo mv /etc/rc.local /etc/rc.local.backup
 sudo cp config/rc.local /etc/
-sudo mv code/Worker/Worker.py /usr/bin/
-sudo chmod +x /usr/bin/Worker.py
 
 # Configure Camera
 sudo rmmod uvcvideo

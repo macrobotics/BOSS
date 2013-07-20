@@ -1,0 +1,4 @@
+#!/bin/sh -e
+# rc.local for BOSS
+sudo python /home/pi/Worker.py
+exit 0

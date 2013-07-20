@@ -32,10 +32,10 @@ CAMERA_HEIGHT = 240.0
 CAMERA_CENTER = CAMERA_WIDTH/2.0
 CAMERA_THRESHOLD = CAMERA_WIDTH/8.0
 ERROR = pi/32.0
-RANGE = CAMERA_WIDTH/1.5
-BIAS = 100.0
+SIZE_GRAB_RANGE = CAMERA_WIDTH/8.0
+BIAS = 10.0
 MINIMUM_COLOR = 0.01
-MINIMUM_SIZE = CAMERA_WIDTH/32.0
+MINIMUM_SIZE = CAMERA_WIDTH/64.0
 MAX_CONNECTIONS = 5
 TURN = pi/16.0
 TRAVEL = 0.5
@@ -43,6 +43,14 @@ ZONE_X = 8.0
 ZONE_Y = 8.0
 START_X = 0.0
 START_Y = 0.0
+DP = 6 
+MIN_DISTANCE = CAMERA_CENTER
+EDGE_THRESHOLD = 40 # param1
+CENTER_THRESHOLD = 20 # param2
+MIN_RADIUS = 10
+MAX_RADIUS = 20
+
+# Error Messages
 ERROR_NONE = 0
 ERROR_PARSE = 254
 ERROR_CONNECTION = 255
@@ -50,12 +58,10 @@ ERROR_CLOSE = 1
 ERROR_FAR = 2
 ERROR_LOAD = 3
 ERROR_ACTION = 4
-DP = 6 
-MIN_DISTANCE = CAMERA_CENTER
-EDGE_THRESHOLD = 40 # param1
-CENTER_THRESHOLD = 20 # param2
-MIN_RADIUS = 10
-MAX_RADIUS = 20
+ERROR_BLOCKED = 5
+ERROR_RIGHT_ORBIT = 6
+ERROR_LEFT_ORBIT = 7
+ERROR_AVOID = 8
 
 # Class Worker
 class Worker:
@@ -87,7 +93,7 @@ class Worker:
       self.error = None
       self.error_number = None
       self.gathered = 0
-      self.stacked = False
+      self.dumped = False
       self.returned = False
       self.x = 0
       self.y = 0
@@ -157,10 +163,10 @@ class Worker:
         self.socket_out.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket_out.bind((ADDRESS_OUT))
         self.socket_out.listen(QUEUE_MAX)
-        (self.connection,self.address) = self.socket_out.accept()
+        (self.connection, self.address) = self.socket_out.accept()
         self.connected_out = True
         message = 'Success.'
-      except socket.error as SocketError:
+      except socket.error as message:
         message = 'Failure.'
         self.connected_out = False
         self.socket_out.close()
@@ -171,10 +177,9 @@ class Worker:
         self.socket_in.connect((ADDRESS_IN))
         self.connected_in = True
         message = 'Success.'
-      except socket.error as error:
+      except socket.error as message:
         self.socket_in.close()
         self.connected_in = False
-        message = 'Failure.'
         pass
       print('[Establishing Receive Port]...' + message)
   
@@ -185,19 +190,23 @@ class Worker:
       dict_command = json.loads(json_command)
       self.command = dict_command['COMMAND']
       message = str(json_command)
-    except socket.error as SocketError:
-      message = 'Connection Failure.'
+    except socket.error as message:
+      pass #!
+    print('----------------------------------')
     print('[Receiving COMMAND]...' + message)
 
   ## After receiving COMMAND, determine action.
   def decide_action(self):
-    if (self.command == 'START') or (self.command == 'CONTINUE'):
+    if (self.command == 'START'):
+      self.goal = 'STARTING'
+      self.start()
+    elif (self.command == 'CONTINUE'):
       if (self.gathered < 4):
         self.goal = 'GATHERING'
         self.gather()
-      elif (not self.stacked):
-        self.goal = 'STACKING'
-        self.stack()
+      elif (not self.dumped):
+        self.goal = 'DUMPING'
+        self.dump()
       elif (not self.returned):
         self.goal = 'RETURNING'
         self.return_home()
@@ -213,85 +222,113 @@ class Worker:
     else:
       self.action = 'W'
 
+  ## Start Logic
+  def start(self):
+    self.action = 'W'
+    print('[Starting]...')
+
   ## Gather Logic
   def gather(self):
     objects = self.detect_objects()
     try:
       (size, offset) = max(objects)
-      if (offset > CAMERA_THRESHOLD):
-        if (offset > 2*CAMERA_THRESHOLD):
-          message = 'Target to Far Right'
-          self.action = 'T'
-          self.orientation += TURN #!
+      if not (self.error_number == 3):
+        if (offset > CAMERA_THRESHOLD):
+          if (offset > 4*CAMERA_THRESHOLD):
+            message = 'Target 4 Right'
+            self.action = 'T'
+            self.orientation += 4*TURN #!
+          elif (offset > 3*CAMERA_THRESHOLD):
+            message = 'Target 3 Right'
+            self.action = 'S'
+            self.orientation += 3*TURN #!
+          elif (offset > 2*CAMERA_THRESHOLD):
+            message = 'Target 2 Right'
+            self.action = 'R'
+            self.orientation += 2*TURN #!
+          else:
+            message = 'Target 1 Right'
+            self.action = 'Q'
+            self.orientation += 1*TURN #!
+        elif (offset < -CAMERA_THRESHOLD):
+          if (offset < -4*CAMERA_THRESHOLD):
+            message = 'Target 4 Left'
+            self.action = 'N'
+          elif (offset < -3*CAMERA_THRESHOLD):
+            message = 'Target 3 Left'
+            self.action = 'M'
+          elif (offset < -2*CAMERA_THRESHOLD):
+            message = 'Target 2 Left'
+            self.action = 'L'
+          else:
+            message = 'Target 1 Left'
+            self.action = 'K'
+        elif (self.is_oriented()):
+          if (size > SIZE_GRAB_RANGE):
+            message = 'Large Enough, Oriented, In Range.'
+            self.action = 'G'
+            self.gathered += 1 #!
+          else:
+            message = 'Large Enough, Oriented, Out Of Range.'
+            self.action = 'F'
+        elif (self.orbited == False):
+          message = 'Large Enough, Not Oriented, Orbiting Right.'
+          self.action = 'O'
         else:
-          message = 'Target to Right'
-          self.action = 'R'
-          self.orientation += TURN #!
-      elif (offset < -CAMERA_THRESHOLD):
-        if (offset < -2*CAMERA_THRESHOLD):
-          message = 'Target to Far Left'
-          self.action = 'M'
-          self.orientation -= TURN #!
-        else:
-          message = 'Target to Left'
-          self.action = 'L'
-          self.orientation += TURN #!
-      elif (self.is_oriented()):
-        if (size > RANGE):
-          message = 'Target in Grab Range'
-          self.action = 'G'
-          self.gathered += 1 #!
-        elif (not self.error_number == ERROR_CLOSE):
-          message = 'Target out of Grab Range'
-          self.action = 'F'
-          self.x += TRAVEL*cos(self.orientation) #!
-          self.y += TRAVEL*sin(self.orientation) #!
-        else:
-          message = 'Object in Way'
-          self.action = 'R'
-          self.orientation += TURN #!
+          message = 'Not Oriented, Blocked Right, Orbiting Left.'
+          self.action = 'P'
       else:
-        message = 'Target Not Oriented'
-        self.action = 'R'
-        self.orientation += TURN #!
+        message = 'Load Failed, Reversing.'
+        self.action = 'B'
     except ValueError:
-      message = 'No Objects Detected'
-      self.action = 'W'
-    print('[Deciding Action]...' + self.goal + '...' + message)
+      message = 'No Objects Detected, Searching Right.'
+      self.action = 'T'
+    print('[Gathering]...' + str(objects) + '...' + message)
 
-  ## Stack Logic
-  def stack(self):
+  ## Dump Logic
+  def dump(self):
     if (not (int(self.x) == ZONE_X and int(self.y) == ZONE_Y)):
       if (self.orientation > tan((ZONE_Y - self.y)/(ZONE_X - self.x)) + ERROR): #!
+        message = 'Need to Turn Left For Zone.'
         self.action = 'L'
         self.orientation -= TURN
       elif (self.orientation < tan((ZONE_Y - self.y)/(ZONE_X - self.x)) - ERROR): #!
+        message = 'Need to Turn Right For Zone.'
         self.action = 'R'
         self.orientation += TURN
-      else:
+      elif not (self.error_number == 1):
+        message = 'Moving Toward Zone.'
         self.action = 'F'
         self.x += TRAVEL*cos(self.orientation) #!
         self.y += TRAVEL*sin(self.orientation) #!
+      else:
+        message = 'Avoiding Object.'
+        self.action = 'A'
     else:  
-      self.action = 'S'
-      self.stacked = True #!
+      message = 'Dumping Bales.'
+      self.action = 'D'
+      self.dumped = True #!
+    print('[Stacking]...' + '(' + str(self.x) + ',' + str(self.y) + ')' + '...' + message)
 
   def return_home(self):
     if (not (int(self.x) == START_X and int(self.y) == START_Y)):
       if (self.orientation > tan((START_Y - self.y)/(START_X - self.x)) + ERROR): #!
+        message = 'Turning Left Towards Home.'
         self.action = 'L'
         self.orientation -= TURN
       elif (self.orientation < tan((ZONE_Y - self.y)/(ZONE_X - self.x)) - ERROR): #!
+        message = 'Turning Right Towards Home.'
         self.action = 'R'
         self.orientation += TURN
       else:
+        message = 'Moving Towards Home.'
         self.action = 'F'
         self.x += TRAVEL*cos(self.orientation) #!
         self.y += TRAVEL*sin(self.orientation) #!
     else:
       self.action = 'W'
       self.returned = True #!
-
+    print('[Returning]...' + '(' + str(self.x) + ',' + str(self.y) + ')' + '...' + message)
   ## Execute action with arduino.
   def control_arduino(self):
 
@@ -339,6 +376,14 @@ class Worker:
       self.error = 'PARSE FAILED'
     elif (self.error_number == ERROR_ACTION):
       self.error = 'BAD ACTION'
+    elif (self.error_number == ERROR_BLOCKED):
+      self.error = 'NOW BLOCKED'
+    elif (self.error_number == ERROR_RIGHT_ORBIT):
+      self.error = 'RIGHT ORBIT FAILED'
+    elif (self.error_number == ERROR_LEFT_ORBIT):
+      self.error = 'LEFT ORBIT FAILED'
+    elif (self.error_number == ERROR_AVOID):
+      self.error = 'AVOID FAILED'
     else:
       self.error = 'UNKNOWN ERROR'
     print('[Handling ERRORS]...' + self.error)
