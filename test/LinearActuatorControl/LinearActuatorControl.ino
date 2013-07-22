@@ -46,7 +46,7 @@ void loop() {
   sensorValue1 = analogRead(analogInPin1);
   sensorValue2 = analogRead(analogInPin2);  
   // map it to the range of the analog out:
-  outputValue = 255;  
+  outputValue = 0;
   // change the analog out value:
   analogWrite(analogOutPin1, outputValue);           
   analogWrite(analogOutPin2, outputValue);           

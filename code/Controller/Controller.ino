@@ -10,8 +10,11 @@
   2: Object Too Far
   3: Load Failed
   4: Bad Action
-  5. Blocked
-  6. Orbit Failed
+  5. Blocked After Turning
+  6. Right Orbit Failed
+  7. Left Orbit Failed
+  8. Right Avoid Failed
+  9. Left Avoid Failed
 */
 
 /* --- Headers --- */
@@ -28,25 +31,24 @@
 #define ACTUATOR2_POSITION_PIN A5 // Purple wire
 #define ULTRASONIC_PIN 8
 #define BAUD 9600
-#define RANGE_GRAB 20 // maximum distance (cm) to grab object
-#define RANGE_STUCK 15
+#define RANGE_GRAB 50 // maximum distance (cm) to grab object
+#define RANGE_STUCK 10
 #define TIME_WAIT 1000
 #define TIME_LEFT 100
 #define TIME_RIGHT 100
-#define TIME_DUMP 3000
-#define TIME_REVERSE 3000
-#define TIME_FORWARD 2000
-#define TIME_LOAD 5000
-#define TIME_BACKWARD 2000
+#define TIME_FORWARD 2500
+#define TIME_BACKWARD 2500
 #define TIME_STEP 100
 #define TIME_DEGREE 15
 #define ACTUATOR_MAX 220
 #define ACTUATOR_MIN 0
+#define ACTUATOR_FEEDBACK_MAX 190
+#define ACTUATOR_FEEDBACK_MIN 600
 #define CR_SERVO_CCW 50
 #define CR_SERVO_CW 150
 #define CR_SERVO_STOP 100
 #define S_SERVO_RESET 30
-#define S_SERVO_LOAD 180
+#define S_SERVO_LOAD 220
 #define S_SERVO_CENTER 90
 
 /* --- Prototypes --- */
@@ -56,9 +58,10 @@ char left(int val);
 char right(int val);
 char grab(void);
 char dump(void);
-char avoid(void);
-char right_orbit(void);
-char left_orbit(void);
+char avoid_right(void);
+char avoid_left(void);
+char orbit_right(void);
+char orbit_left(void);
 long ping(void);
 char wait(void);
 char extend_arm(void);
@@ -72,9 +75,10 @@ const char ERROR_FAR = '2';
 const char ERROR_LOAD = '3';
 const char ERROR_ACTION = '4';
 const char ERROR_BLOCKED = '5';
-const char ERROR_LEFT_ORBIT = '6';
-const char ERROR_RIGHT_ORBIT = '7';
-const char ERROR_AVOID = '8';
+const char ERROR_ORBIT_RIGHT = '6';
+const char ERROR_ORBIT_LEFT = '7';
+const char ERROR_AVOID_RIGHT = '8';
+const char ERROR_AVOID_LEFT = '9';
 
 /* --- Basic Actions --- */
 const char MOVE_FORWARD = 'F';
@@ -96,9 +100,10 @@ const char TURN_AROUND = 'Z';
 /* --- Complex --- */
 const char GRAB = 'G';
 const char DUMP = 'D';
-const char AVOID = 'A';
-const char RIGHT_ORBIT = 'O';
-const char LEFT_ORBIT = 'P';
+const char AVOID_RIGHT = 'I';
+const char AVOID_LEFT = 'J';
+const char ORBIT_RIGHT = 'O';
+const char ORBIT_LEFT = 'P';
 
 /* --- Declarations ---*/
 char action;
@@ -161,14 +166,17 @@ void loop() {
     case WAIT:
       error = wait();
       break;
-    case RIGHT_ORBIT:
-      error = right_orbit();
+    case ORBIT_RIGHT:
+      error = orbit_right();
       break;
-    case LEFT_ORBIT:
-      error = left_orbit();
+    case ORBIT_LEFT:
+      error = orbit_left();
       break;
-    case AVOID:
-      error = avoid();
+    case AVOID_RIGHT:
+      error = avoid_right();
+      break;
+    case AVOID_LEFT:
+      error = avoid_left();
       break;
     case EXTEND_ARM:
       error = extend_arm();
@@ -180,7 +188,7 @@ void loop() {
       error = center_arm();
       break;
     case TURN_AROUND:
-      error = right(60);
+      error = right(25);
       break;
     default:
       error = ERROR_ACTION;
@@ -205,14 +213,16 @@ char forward() {
   char temp;
   
   // Try
+  temp = center_arm();
+  right_servo.write(CR_SERVO_CW);
+  left_servo.write(CR_SERVO_CCW);
+  delay(TIME_FORWARD);
+  right_servo.write(CR_SERVO_STOP);
+  left_servo.write(CR_SERVO_STOP);
+  temp = extend_arm();
+
   if (ping() > RANGE_GRAB) {
-    temp = center_arm();
-    right_servo.write(CR_SERVO_CW);
-    left_servo.write(CR_SERVO_CCW);
-    delay(TIME_FORWARD);
-    right_servo.write(CR_SERVO_STOP);
-    left_servo.write(CR_SERVO_STOP);
-    error = ERROR_NONE;  
+    error = ERROR_NONE;
   }
   else {
     error = ERROR_CLOSE; // Object Too Close
@@ -291,31 +301,22 @@ char grab() {
   
   // Prepare
   char error;
-  char temp = extend_arm();
-  
-  // Execute Action
+  char temp;
+
+  temp = extend_arm();
+  right_servo.write(CR_SERVO_CW);
+  left_servo.write(CR_SERVO_CCW);
+  delay(TIME_FORWARD);
+  right_servo.write(CR_SERVO_STOP);
+  left_servo.write(CR_SERVO_STOP);
+  temp = use_arm();
+  temp = extend_arm();
   if (ping() < RANGE_GRAB) {
-    while (ping() > RANGE_GRAB) {
-      right_servo.write(CR_SERVO_CW);
-      left_servo.write(CR_SERVO_CCW);
-      delay(TIME_STEP);
-    }
-    right_servo.write(CR_SERVO_STOP);
-    left_servo.write(CR_SERVO_STOP);
-    temp = use_arm();
-    if (ping() < RANGE_STUCK) {
-      error = ERROR_LOAD;
-    }
-    else {
-      error = ERROR_NONE;
-    }
+    error = ERROR_LOAD;
   }
   else {
-    error = ERROR_FAR;
+    error = ERROR_NONE;
   }
-  
-  // Return errors
-  temp = extend_arm();
   return error;
 }
 
@@ -323,124 +324,141 @@ char grab() {
 char dump() {
   
   // Prepare
-  char error;
+  char error = ERROR_NONE;
   char temp;
+  int position1 = analogRead(ACTUATOR1_POSITION_PIN);
+  int position2 = analogRead(ACTUATOR2_POSITION_PIN);
   
-  // Prepare
-  error = right(60);
+  // Turn Around
+  temp = right(60);
   
   // Tuck Arm
-  error = center_arm();
+  temp = use_arm();
   
   // Raise rack
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MAX);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MAX);             
-  delay(TIME_DUMP);
+  while (position1 >= ACTUATOR_FEEDBACK_MAX) {
+    delay(TIME_WAIT);
+    position1 = analogRead(ACTUATOR1_POSITION_PIN);
+    position2 = analogRead(ACTUATOR2_POSITION_PIN);
+  }
   
   // Move forward
-  error = forward();
-  delay(TIME_WAIT);
+  temp = forward();
   
   // Lower rack
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MIN);
-  analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MIN);
-  delay(TIME_DUMP); 
+  analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MIN);             
+  while (position1 <= ACTUATOR_FEEDBACK_MIN) {
+    delay(TIME_WAIT);
+    position1 = analogRead(ACTUATOR1_POSITION_PIN);
+    position2 = analogRead(ACTUATOR2_POSITION_PIN);
+  }
   
   // Extend arm
-  error = extend_arm();
+  temp = extend_arm();
   
   // Return Errors
   return error;
 }
 
-/* --- Avoid --- */
-char avoid() {
+/* --- Avoid Right --- */
+char avoid_right() {
   
-  // Prepare
-  char error = ERROR_NONE;
+    // Prepare
+  char error;
   char temp = center_arm();
   
-  // Turn right
-  error = right(2);
+  // Attempt to Avoid
+  error = right(5);
+  switch (error) {
+    case ERROR_NONE:
+      temp = forward();
+      temp = left(7);
+      temp = forward();
+      break;
+    case ERROR_BLOCKED:
+      temp = left(5);
+      error = ERROR_AVOID_RIGHT;
+      break;
+  }
   
-  // Move forward
-  error = forward();
+  // Return error
+  return error;
+}
+
+/* --- Left Avoid --- */
+char avoid_left() {
   
-  // Turn Left
-  error = left(2);
+    // Prepare
+  char error;
+  char temp = center_arm();
   
-  // Move forward
-  error = forward();
+  // Attempt to Avoid
+  error = left(5);
+  switch (error) {
+    case ERROR_NONE:
+      temp = forward();
+      temp = right(7);
+      temp = forward();
+      error = ERROR_NONE;
+      break;
+    case ERROR_BLOCKED:
+      temp = right(5);
+      error = ERROR_AVOID_LEFT;
+      break;
+  }
   
   // Return error
   return error;
 }
 
 /* --- Right Orbit --- */
-char right_orbit() {
+char orbit_right() {
   
   // Prepare
-  char error = ERROR_NONE;
+  char error;
   char temp;
   
   // Turn right
-  error = right(15);
+  temp = right(10);
   
-  // Try to move forward
-  switch (error) {
-    // if clear move forward
+  // Try to Orbit
+  switch (temp) {
     case ERROR_NONE:
-      error = forward();
-      switch (error) {
-        // if successful turn back
-        case ERROR_NONE:
-          error = left(30);
-          break;
-        // if unsuccessful turn back
-        case ERROR_CLOSE:
-          error = left(15);
-          error = ERROR_RIGHT_ORBIT;
-          break;
-      }
+      temp = forward();
+      temp = left(15);
+      error = ERROR_NONE;
       break;
-    // if can't. turn back
     case ERROR_CLOSE:
-      error = left(15);
-      error = ERROR_RIGHT_ORBIT;
+      temp = left(10);
+      error = ERROR_ORBIT_RIGHT;
       break;
   }
+  
   // Return Errors
   return error;
 }
 
 /* --- Left Orbit --- */
-char left_orbit() {
-  char error = ERROR_NONE;
+char orbit_left() {
+  char error;
+  char temp;
   
   // Turn right
-  error = left(15);
+  temp = left(10);
   
-  // Try to move forward
-  switch (error) {
-    // if clear move forward
+  // Try to Move forward
+  switch (temp) {
     case ERROR_NONE:
-      error = forward();
-      switch (error) {
-        // if successful turn back
-        case ERROR_NONE:
-          error = right(30);
-          break;
-        // if unsuccessful turn back
-        case ERROR_CLOSE:
-          error = right(15);
-          error = ERROR_LEFT_ORBIT;
-          break;
-      }
+      temp = forward();
+      temp = right(15);
+      error = ERROR_NONE;
       break;
-    // if can't. turn back
     case ERROR_CLOSE:
-      error = left(15);
-      error = ERROR_LEFT_ORBIT;
+      temp = right(10);
+      error = ERROR_ORBIT_LEFT;
       break;
   }
   // Return Errors
@@ -458,7 +476,7 @@ char wait() {
 /* --- Ping --- */
 // Ping for distance to closest object
 long ping() {
-  int centimeters;
+  long centimeters;
   pinMode(ULTRASONIC_PIN, OUTPUT);
   digitalWrite(ULTRASONIC_PIN, LOW);
   delayMicroseconds(2);

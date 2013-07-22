@@ -43,16 +43,16 @@ class Server:
         self.update_gui()
         self.receive_response()
         self.update_gui()
-    else:
-      self.send_command('STOP')
-      self.update_gui()
-      self.receive_response()
-      self.update_gui()
+#    else:
+#      self.send_command('STOP')
+#      self.update_gui()
+#      self.receive_response()
+#      self.update_gui()
   
   ## Receive Response from Workers
   def receive_response(self):
     try:
-      print("Receiving ACTION from Green Worker...")
+      print("[Receiving ACTIONS from Workers]...")
       json_response = self.green_socket_in.recv(BUFFER_SIZE)
       parsed_response = json.loads(json_response)
       action = parsed_response['ACTION']

@@ -3,7 +3,7 @@ import numpy as np
 import sys
 
 # Setup
-CAMERA_INDEX = 1
+CAMERA_INDEX = 0
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
 
@@ -46,5 +46,7 @@ except AttributeError:
   print('None detected')
 cv2.imshow('DETECTED', colored)
 cv2.imshow('THRESHOLD', thresholded)
+cv2.imwrite('thresh.jpg', thresholded)
+cv2.imwrite('colored.jpg',colored)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
