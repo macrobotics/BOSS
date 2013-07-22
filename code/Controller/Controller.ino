@@ -33,11 +33,13 @@
 #define BAUD 9600
 #define RANGE_GRAB 50 // maximum distance (cm) to grab object
 #define RANGE_STUCK 10
-#define TIME_WAIT 1000
+#define TIME_WAIT 500
 #define TIME_LEFT 100
 #define TIME_RIGHT 100
 #define TIME_FORWARD 2500
 #define TIME_BACKWARD 2500
+#define TIME_RACK_UP 22000
+#define TIME_RACK_DOWN 22000
 #define TIME_STEP 100
 #define TIME_DEGREE 15
 #define ACTUATOR_MAX 220
@@ -98,6 +100,7 @@ const char CENTER_ARM = 'C';
 const char TURN_AROUND = 'Z';
 
 /* --- Complex --- */
+const char HELP_RACK = 'H';
 const char GRAB = 'G';
 const char DUMP = 'D';
 const char AVOID_RIGHT = 'I';
@@ -127,6 +130,9 @@ void setup() {
 void loop() {
   action = Serial.read();
   switch(action) {
+    case HELP_RACK:
+      error = help_rack();
+      break;
     case MOVE_FORWARD:
       error = forward();
       break;
@@ -319,6 +325,17 @@ char grab() {
   }
   return error;
 }
+/* --- Help Rack --- */
+char help_rack() {
+  analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MAX);
+  analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MAX);             
+  delay(TIME_RACK_UP);
+  analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MIN);
+  analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MIN);             
+  delay(TIME_RACK_DOWN);
+  
+  return ERROR_NONE;
+}
 
 /* --- Dump --- */
 char dump() {
@@ -330,7 +347,7 @@ char dump() {
   int position2 = analogRead(ACTUATOR2_POSITION_PIN);
   
   // Turn Around
-  temp = right(60);
+  temp = right(25);
   
   // Tuck Arm
   temp = use_arm();
@@ -338,11 +355,7 @@ char dump() {
   // Raise rack
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MAX);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MAX);             
-  while (position1 >= ACTUATOR_FEEDBACK_MAX) {
-    delay(TIME_WAIT);
-    position1 = analogRead(ACTUATOR1_POSITION_PIN);
-    position2 = analogRead(ACTUATOR2_POSITION_PIN);
-  }
+  delay(TIME_RACK_UP);
   
   // Move forward
   temp = forward();
@@ -350,11 +363,7 @@ char dump() {
   // Lower rack
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MIN);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MIN);             
-  while (position1 <= ACTUATOR_FEEDBACK_MIN) {
-    delay(TIME_WAIT);
-    position1 = analogRead(ACTUATOR1_POSITION_PIN);
-    position2 = analogRead(ACTUATOR2_POSITION_PIN);
-  }
+  delay(TIME_RACK_DOWN);
   
   // Extend arm
   temp = extend_arm();

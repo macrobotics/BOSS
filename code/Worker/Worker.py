@@ -196,8 +196,6 @@ class Worker:
         self.return_home()
       else:
         self.action = 'W'
-    elif (self.command == 'STOP'):
-      self.action = 'W'
     elif (self.command == 'PAUSE'):
       self.action = 'W'
     elif (self.command == 'DISCONNECT'):
@@ -208,8 +206,8 @@ class Worker:
 
   ## Start Logic
   def start(self):
-    self.action = 'W'
-    print('[Starting]...Dumping Rack.')
+    self.action = 'H'
+    print('[Starting]...Helping Extend Rack.')
 
   ## Gather Logic
   def gather(self):
