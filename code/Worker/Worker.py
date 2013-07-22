@@ -69,6 +69,7 @@ class Worker:
 
   ## Initialize Worker robot.
   def __init__(self):
+    
     try:
       self.camera = VideoCapture(CAMERA_INDEX)
       self.camera.set(3,CAMERA_WIDTH)
@@ -85,25 +86,7 @@ class Worker:
       message = 'Failure.'
     print('[Setting up Controller]...' + message)
 
-    try:
-      self.connected_out = False
-      self.connected_in = False
-      self.command = None
-      self.response = None
-      self.action = None
-      self.previous_action = None
-      self.error = None
-      self.error_number = None
-      self.gathered = 0
-      self.dumped = False
-      self.returned = False
-      self.x = 0
-      self.y = 0
-      self.orientation = 0
-      message = 'Success.'
-    except Exception:
-      message = 'Failure.'
-    print('[Initializing Worker]...' + message)
+    self.reset_worker()
 
   ## Capture image then identify target objects.
   def detect_objects(self):
@@ -459,11 +442,22 @@ class Worker:
       self.socket_in.close()
       self.socket_out.close()
       self.connection.close()
-      self.connected_in = False
+      self.reset_worker()
+      message = 'Success.'
+    except Exception:
+      message = 'Failure.'
+      pass
+    print('[Disconnecting]...' + message)
+
+  ## Reset Worker
+  def reset_worker(self):
+    try:
       self.connected_out = False
+      self.connected_in = False
       self.command = None
       self.response = None
       self.action = None
+      self.previous_action = None
       self.error = None
       self.error_number = None
       self.gathered = 0
@@ -475,13 +469,8 @@ class Worker:
       message = 'Success.'
     except Exception:
       message = 'Failure.'
-      pass
-    print('[Disconnecting]...' + message)
-
-  ## Close
-  def close(self):
-    self.camera.release()
-
+    print('[Resetting Worker]...' + message)
+    
 # Main
 if __name__ == "__main__":
   green = Worker()
