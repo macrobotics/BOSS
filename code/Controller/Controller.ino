@@ -69,6 +69,7 @@ char wait(void);
 char extend_arm(void);
 char use_arm(void);
 char center_arm(void);
+char help_rack(void);
 
 /* --- Error Codes --- */
 const char ERROR_NONE = '0';
