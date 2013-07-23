@@ -33,16 +33,12 @@ CAMERA_CENTER = CAMERA_WIDTH/2.0
 CAMERA_LEVEL = CAMERA_HEIGHT/2.0
 CAMERA_THRESHOLD = CAMERA_WIDTH/8.0
 SIZE_GRAB_RANGE = CAMERA_WIDTH/4.0
+SIZE_ZONE_RANGE = CAMERA_WIDTH/3.0
+SIZE_HOME_RANGE = CAMERA_WIDTH/3.0
 BIAS = 10.0
 MINIMUM_COLOR = 0.01
 MINIMUM_SIZE = CAMERA_WIDTH/64.0
 MAX_CONNECTIONS = 5
-TURN = pi/16.0 # in radians
-TRAVEL = 0.5
-ZONE_X = 8.0
-ZONE_Y = 8.0
-START_X = 0.0
-START_Y = 0.0
 DP = 6 
 MIN_DISTANCE = CAMERA_CENTER
 EDGE_THRESHOLD = 40 # param1
@@ -88,8 +84,8 @@ class Worker:
 
     self.reset_worker()
 
-  ## Capture image then identify target objects.
-  def detect_objects(self):
+  ## Capture image then identify Home.
+  def detect_green(self):
     objects = []
     x = 0
     for cache in range(10):
@@ -100,6 +96,36 @@ class Worker:
     G = array(BGR[1].getdata(), dtype=float32)
     R = array(BGR[2].getdata(), dtype=float32)
     NDI_G = (BIAS*G + MINIMUM_COLOR)/(R + B + MINIMUM_COLOR)
+    matrix = NDI_G.reshape(CAMERA_HEIGHT,CAMERA_WIDTH)
+    columns = matrix.sum(axis=0)
+    high = numpy.mean(columns) + numpy.std(columns)
+    low = numpy.mean(columns)
+    while (x < CAMERA_WIDTH-1):
+      if (columns[x] > high):
+        start = x
+        while (columns[x] > low) and (x < CAMERA_WIDTH-1):
+          x += 1
+        end = x
+        size = (end - start)
+        offset = (start + (end - start)/2) - CAMERA_CENTER
+        if (size > MINIMUM_SIZE):
+          objects.append((size,offset))
+      else:
+        x += 1
+    return objects
+
+  ## Detect 
+  def detect_yellow(self):
+    objects = []
+    x = 0
+    for cache in range(10):
+      (success, frame) = self.camera.read()
+    raw = Image.fromarray(frame)
+    BGR = raw.split()
+    B = array(BGR[0].getdata(), dtype=float32)
+    G = array(BGR[1].getdata(), dtype=float32)
+    R = array(BGR[2].getdata(), dtype=float32)
+    NDI_G = BIAS*(G + R + MINIMUM_COLOR)/(2*B + MINIMUM_COLOR)
     matrix = NDI_G.reshape(CAMERA_HEIGHT,CAMERA_WIDTH)
     columns = matrix.sum(axis=0)
     high = numpy.mean(columns) + numpy.std(columns)
@@ -191,16 +217,17 @@ class Worker:
       elif (not self.dumped):
         self.goal = 'STACKING'
         self.find_zone()
-      elif (not self.returned):
+      elif (not self.returning):
         self.goal = 'RETURNING'
         self.return_home()
       else:
         self.action = 'W'
     elif (self.command == 'PAUSE'):
+      self.goal = 'PAUSING'
       self.action = 'W'
     elif (self.command == 'DISCONNECT'):
+      self.goal = 'DISCONNECTING'
       self.action = 'W'
-      self.disconnect()
     else:
       self.action = 'W'
 
@@ -211,7 +238,7 @@ class Worker:
 
   ## Gather Logic
   def gather(self):
-    objects = self.detect_objects()
+    objects = self.detect_green()
     #1 There is an object in view...
     try:
       (size, offset) = max(objects)
@@ -226,7 +253,7 @@ class Worker:
         for previous_action in ['K','L','M','N']:
           if (self.previous_action == previous_action):
             message = 'Blocked After Turning Left --> Avoiding Right.'
-            self.action = 'I' #!
+            self.action = 'I'
       #2 ...and I wasn't just trying to grab something...
       elif not (self.error_number == 3):
         #3 ...and it's to the right.
@@ -234,19 +261,15 @@ class Worker:
           if (offset > 4*CAMERA_THRESHOLD):
             message = '(Object in View -> 4 Right.'
             self.action = 'T'
-            self.orientation += 4*TURN
           elif (offset > 3*CAMERA_THRESHOLD):
             message = 'Object in View -> 3 Right.'
             self.action = 'S'
-            self.orientation += 3*TURN
           elif (offset > 2*CAMERA_THRESHOLD):
             message = 'Object in View -> 2 Right.'
             self.action = 'R'
-            self.orientation += 2*TURN
           else:
             message = 'Object in View -> 1 Right'
             self.action = 'Q'
-            self.orientation += 1*TURN
         #3 ...and it's to the left.
         elif (offset < -CAMERA_THRESHOLD):
           if (offset < -4*CAMERA_THRESHOLD):
@@ -273,7 +296,7 @@ class Worker:
             if (self.is_oriented()):
               message = 'Large Enough -> In Range, Oriented -> Grab'
               self.action = 'G'
-              self.gathered += 1 #!
+              self.gathered += 1 
             #5 ...but it isn't oriented...
             else:
               #6  ... and I didn't just try to go around right.
@@ -303,66 +326,121 @@ class Worker:
 
   ## Find Zone
   def find_zone(self):
-    #1 Not at the zone...
-    if not ((int(self.x) == ZONE_X) and (int(self.y) == ZONE_Y)):
-      #2 Clockwise from Zone...
-      if (self.orientation > tan((ZONE_Y - self.y)/(ZONE_X - self.x)) + TURN): #!
-        message = 'Clockwise from Zone -> Turning Left.'
-        self.action = 'L'
-        self.orientation -= TURN
-      #2 Counter-clockwise from Zone...
-      elif (self.orientation < tan((ZONE_Y - self.y)/(ZONE_X - self.x)) - TURN): #!
-        message = 'Counter-clockwise from Zone -> Turning Right.'
-        self.action = 'R'
-        self.orientation += TURN
-      #2 Facing Zone...
-      else:
-        if (self.error_number == 1):
-          message = 'Path Blocked -> Avoiding Right.'
-          self.action = 'I'
-        else:     
-          message = 'Facing Zone -> Moving Forward.'
-          self.action = 'F'
-          self.x += TRAVEL*cos(self.orientation) #!
-          self.y += TRAVEL*sin(self.orientation) #!
-    #1 Reached zone...
-    else:  
-      message = 'At Zone -> Dumping Bales.'
-      self.action = 'D'
-      self.dumped = True #!
-    print('[Finding Zone]...' + str((self.x, self.y, self.orientation)) + '...' + message)
+    objects = self.detect_green()
+    # The Zone is in view...
+    try:
+      (size, offset) = max(objects)
+      #2 ... but not at the zone...
+      if (size < SIZE_HOME_RANGE):
+        #3 ... and it's to the right.
+        if (offset > CAMERA_THRESHOLD):
+          if (offset > 4*CAMERA_THRESHOLD):
+            message = '(Zone in View -> 4 Right.'
+            self.action = 'T'
+          elif (offset > 3*CAMERA_THRESHOLD):
+            message = 'Zone in View -> 3 Right.'
+            self.action = 'S'
+          elif (offset > 2*CAMERA_THRESHOLD):
+            message = 'Zone in View -> 2 Right.'
+            self.action = 'R'
+          else:
+            message = 'Zone in View -> 1 Right'
+            self.action = 'Q'
+        #3 ...and it's to the left.
+        elif (offset < -CAMERA_THRESHOLD):
+          if (offset < -4*CAMERA_THRESHOLD):
+            message = 'Zone in View -> 4 Left'
+            self.action = 'N'
+          elif (offset < -3*CAMERA_THRESHOLD):
+            message = 'Zone in View -> 3 Left'
+            self.action = 'M'
+          elif (offset < -2*CAMERA_THRESHOLD):
+            message = 'Zone in View -> 2 Left'
+            self.action = 'L'
+          else:
+            message = 'Zone in View -> 1 Left'
+            self.action = 'K'
+        #3 ...and it is straight ahead.
+        else:
+          #4 ...but it is blocked.
+          if ((self.error_number == 5) or (self.error_number == 1)):
+            message = 'Object in Way -> Avoiding Right.'
+            self.action = 'I'
+          elif (self.error_number == 8):
+            message = 'Object in Way, Failed to Avoid Right -> Avoiding Left.'
+            self.action = 'J'
+          else:
+            message = 'Zone Too Small -> Moving Forward.'
+            self.action = 'F'
+      #2 ..and have reached the zone...
+      else:  
+        message = 'At Zone -> Dumping Bales.'
+        self.action = 'D'
+        self.dumped = True
+    #1 The Zone is not in view...
+    except ValueError:
+        message = 'Cannot See Zone -> Searching Left For Zone.'
+        self.action = 'N'
+    print('[Finding Zone]...' + message)
   
   ## Return Home
   def return_home(self):
-    #1 I'm not at home...
-    if not ((int(self.x) == START_X) and (int(self.y) == START_Y)):
-      #2 ...and I am clockwise from home...
-      if (self.orientation > tan((START_Y - self.y)/(START_X - self.x)) + RADIANS_TURN): #!
-        message = 'Clockwise from Home -> Turning Left.'
-        self.action = 'L'
-        self.orientation -= TURN
-      #2 ...and I am counter-clockwise from home...
-      elif (self.orientation < tan((ZONE_Y - self.y)/(ZONE_X - self.x)) - RADIANS_TURN): #!
-        message = 'Counter-clockwise from Home -> Turning Right.'
-        self.action = 'R'
-        self.orientation += TURN
-      #2 ..and I am facing home...
-      else:
-        #3 ...but not blocked.
-        if not (error_number == 1):
-          message = 'Facing Home -> Moving Forward.'
-          self.action = 'F'
-          self.x += TRAVEL*cos(self.orientation) #!
-          self.y += TRAVEL*sin(self.orientation) #!
-        #3 ...but am blocked.
+    objects = self.detect_yellow()
+    #1 Home is in view...
+    try:
+      (size, offset) = max(objects)
+      #2 ... but not at the home...
+      if (size < SIZE_ZONE_RANGE):
+        #3 ... and it's to the right.
+        if (offset > CAMERA_THRESHOLD):
+          if (offset > 4*CAMERA_THRESHOLD):
+            message = 'Home in View -> 4 Right.'
+            self.action = 'T'
+          elif (offset > 3*CAMERA_THRESHOLD):
+            message = 'Home in View -> 3 Right.'
+            self.action = 'S'
+          elif (offset > 2*CAMERA_THRESHOLD):
+            message = 'Home in View -> 2 Right.'
+            self.action = 'R'
+          else:
+            message = 'Home in View -> 1 Right'
+            self.action = 'Q'
+        #3 ...and it's to the left.
+        elif (offset < -CAMERA_THRESHOLD):
+          if (offset < -4*CAMERA_THRESHOLD):
+            message = 'Home in View -> 4 Left'
+            self.action = 'N'
+          elif (offset < -3*CAMERA_THRESHOLD):
+            message = 'Home in View -> 3 Left'
+            self.action = 'M'
+          elif (offset < -2*CAMERA_THRESHOLD):
+            message = 'Home in View -> 2 Left'
+            self.action = 'L'
+          else:
+            message = 'Home in View -> 1 Left'
+            self.action = 'K'
+        #3 ...and it is straight ahead.
         else:
-          message = 'Path Blocked -> Avoiding Right.'
-          self.action = 'I'
-    #1 I've reached home.
-    else:
-      self.action = 'W'
-      self.returned = True #!
-    print('[Returning]...' + '(' + str(self.x) + ',' + str(self.y) + ')' + '...' + message)
+          #4 ...but it is blocked.
+          if ((self.error_number == 5) or (self.error_number == 1)):
+            message = 'Object in Way -> Avoiding Right.'
+            self.action = 'I'
+          elif (self.error_number == 8):
+            message = 'Object in Way, Failed to Avoid Right -> Avoiding Left.'
+            self.action = 'J'
+          else:
+            message = 'Home Too Small -> Moving Forward.'
+            self.action = 'F'
+      #2 ..and have reached the zone...
+      else:  
+        message = 'At Home -> Parking.'
+        self.action = 'F'
+        self.returned = True
+    #1 Home is not in view...
+    except ValueError:
+        message = 'Cannot See Home -> Searching Left For Home.'
+        self.action = 'N'
+    print('[Finding Home]...' + message)
 
   ## Execute action with arduino.
   def control_arduino(self):
@@ -480,9 +558,8 @@ if __name__ == "__main__":
       green.decide_action()
       green.control_arduino()
       green.handle_error()
-      if (green.connected_in == False) or (green.connected_out == False):
-        break
+      if (green.command == 'DISCONNECT'):
+        green.send_response()
+        green.disconnect()
       else:
         green.send_response()
-    else:
-      green.disconnect()

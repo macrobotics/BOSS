@@ -43,12 +43,7 @@ class Server:
         self.update_gui()
         self.receive_response()
         self.update_gui()
-#    else:
-#      self.send_command('STOP')
-#      self.update_gui()
-#      self.receive_response()
-#      self.update_gui()
-  
+
   ## Receive Response from Workers
   def receive_response(self):
     try:

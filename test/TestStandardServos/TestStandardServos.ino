@@ -15,7 +15,7 @@ Servo load_servo;
 
 /* --- Setup --- */
 void setup() {
-  load_servo.attach(9);
+  load_servo.attach(11);
   Serial.begin(BAUD);
 }
 

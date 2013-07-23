@@ -38,19 +38,20 @@
 #define TIME_RIGHT 100
 #define TIME_FORWARD 2500
 #define TIME_BACKWARD 2500
-#define TIME_RACK_UP 22000
-#define TIME_RACK_DOWN 22000
+#define TIME_RACK_UP 20000
+#define TIME_RACK_DOWN 20000
 #define TIME_STEP 100
 #define TIME_DEGREE 15
-#define ACTUATOR_MAX 220
+#define ACTUATOR_MAX 200
+#define ACTUATOR_FULL 255
 #define ACTUATOR_MIN 0
 #define ACTUATOR_FEEDBACK_MAX 190
 #define ACTUATOR_FEEDBACK_MIN 600
 #define CR_SERVO_CCW 50
 #define CR_SERVO_CW 150
 #define CR_SERVO_STOP 100
-#define S_SERVO_RESET 30
-#define S_SERVO_LOAD 220
+#define S_SERVO_RESET 0
+#define S_SERVO_LOAD 180
 #define S_SERVO_CENTER 90
 
 /* --- Prototypes --- */
@@ -66,9 +67,7 @@ char orbit_right(void);
 char orbit_left(void);
 long ping(void);
 char wait(void);
-char extend_arm(void);
-char use_arm(void);
-char center_arm(void);
+char use_arm(int final);
 char help_rack(void);
 
 /* --- Error Codes --- */
@@ -186,13 +185,13 @@ void loop() {
       error = avoid_left();
       break;
     case EXTEND_ARM:
-      error = extend_arm();
+      error = use_arm(0);
       break;
     case USE_ARM:
-      error = use_arm();
+      error = use_arm(180);
       break;
     case CENTER_ARM:
-      error = center_arm();
+      error = use_arm(90);
       break;
     case TURN_AROUND:
       error = right(25);
@@ -220,13 +219,13 @@ char forward() {
   char temp;
   
   // Try
-  temp = center_arm();
+  temp = use_arm(90);
   right_servo.write(CR_SERVO_CW);
   left_servo.write(CR_SERVO_CCW);
   delay(TIME_FORWARD);
   right_servo.write(CR_SERVO_STOP);
   left_servo.write(CR_SERVO_STOP);
-  temp = extend_arm();
+  temp = use_arm(0);
 
   if (ping() > RANGE_GRAB) {
     error = ERROR_NONE;
@@ -310,14 +309,14 @@ char grab() {
   char error;
   char temp;
 
-  temp = extend_arm();
+  temp = use_arm(0);
   right_servo.write(CR_SERVO_CW);
   left_servo.write(CR_SERVO_CCW);
   delay(TIME_FORWARD);
   right_servo.write(CR_SERVO_STOP);
   left_servo.write(CR_SERVO_STOP);
-  temp = use_arm();
-  temp = extend_arm();
+  temp = use_arm(180);
+  temp = use_arm(0);
   if (ping() < RANGE_GRAB) {
     error = ERROR_LOAD;
   }
@@ -328,13 +327,15 @@ char grab() {
 }
 /* --- Help Rack --- */
 char help_rack() {
+  char temp;
+  temp = use_arm(180);
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MAX);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MAX);             
   delay(TIME_RACK_UP);
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MIN);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MIN);             
   delay(TIME_RACK_DOWN);
-  
+  temp = use_arm(0);
   return ERROR_NONE;
 }
 
@@ -344,19 +345,20 @@ char dump() {
   // Prepare
   char error = ERROR_NONE;
   char temp;
-  int position1 = analogRead(ACTUATOR1_POSITION_PIN);
-  int position2 = analogRead(ACTUATOR2_POSITION_PIN);
   
   // Turn Around
   temp = right(25);
   
   // Tuck Arm
-  temp = use_arm();
+  temp = use_arm(180);
   
   // Raise rack
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MAX);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MAX);             
   delay(TIME_RACK_UP);
+  analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_FULL);
+  analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_FULL);
+  delay(TIME_WAIT);
   
   // Move forward
   temp = forward();
@@ -367,7 +369,7 @@ char dump() {
   delay(TIME_RACK_DOWN);
   
   // Extend arm
-  temp = extend_arm();
+  temp = use_arm(0);
   
   // Return Errors
   return error;
@@ -378,7 +380,7 @@ char avoid_right() {
   
     // Prepare
   char error;
-  char temp = center_arm();
+  char temp = use_arm(90);
   
   // Attempt to Avoid
   error = right(5);
@@ -403,7 +405,7 @@ char avoid_left() {
   
     // Prepare
   char error;
-  char temp = center_arm();
+  char temp = use_arm(90);
   
   // Attempt to Avoid
   error = left(5);
@@ -478,7 +480,7 @@ char orbit_left() {
 /* --- Wait --- */
 char wait() {
   char error = ERROR_NONE;
-  error = center_arm();
+  error = use_arm(90);
   delay(TIME_WAIT);
   return error;
 }
@@ -498,33 +500,17 @@ long ping() {
   return centimeters;
 }
 
-/* --- Helper Functions --- */
-char extend_arm() {
-  for (int degree = S_SERVO_LOAD; degree > S_SERVO_RESET; degree--) {
-    load_servo.write(degree);
-    delay(TIME_DEGREE);
-  }
-  return ERROR_NONE;
-}
-
-char use_arm() {
-  for (int degree = S_SERVO_RESET; degree < S_SERVO_LOAD; degree++) {
-    load_servo.write(degree);
-    delay(TIME_DEGREE);
-  }
-  return ERROR_NONE;
-}
-
-char center_arm() {
+/* --- Use Arm --- */
+char use_arm(int final) {
   int start = load_servo.read();
-  if (start > S_SERVO_CENTER) {
-    for (int degree = start; degree > S_SERVO_CENTER; degree--) {
+  if (start > final) {
+    for (int degree = start; degree > final; degree--) {
       load_servo.write(degree);
       delay(TIME_DEGREE);
     }
   }
   else {
-    for (int degree = start; degree < S_SERVO_CENTER; degree++) {
+    for (int degree = start; degree < final; degree++) {
       load_servo.write(degree);
       delay(TIME_DEGREE);
     }
