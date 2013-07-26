@@ -14,8 +14,8 @@ import json
 import time
 
 # Global
-GREEN_SEND = ('', 50000)
-GREEN_RECEIVE = ('10.42.0.3', 50001)
+GREEN_SEND = ('', 40000)
+GREEN_RECEIVE = ('10.42.0.3', 40001)
 RED_SEND = ('', 60000)
 RED_RECEIVE = ('10.42.0.2', 60001)
 BLUE_SEND = ('', 70000)

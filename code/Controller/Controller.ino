@@ -31,28 +31,29 @@
 #define ACTUATOR2_POSITION_PIN A5 // Purple wire
 #define ULTRASONIC_PIN 8
 #define BAUD 9600
-#define RANGE_GRAB 50 // maximum distance (cm) to grab object
+#define RANGE_GRAB 40 // maximum distance (cm) to grab object
 #define RANGE_STUCK 10
 #define TIME_WAIT 500
 #define TIME_LEFT 100
 #define TIME_RIGHT 100
-#define TIME_FORWARD 2500
+#define TIME_FORWARD 2000
+#define TIME_GRAB 3000
 #define TIME_BACKWARD 2500
-#define TIME_RACK_UP 20000
-#define TIME_RACK_DOWN 20000
+#define TIME_RACK 18000
+#define TIME_RACK_END 4000
 #define TIME_STEP 100
 #define TIME_DEGREE 15
-#define ACTUATOR_MAX 200
-#define ACTUATOR_FULL 255
+#define ACTUATOR_MAX 210
+#define ACTUATOR_FULL 250
 #define ACTUATOR_MIN 0
-#define ACTUATOR_FEEDBACK_MAX 190
+#define ACTUATOR_FEEDBACK_MAX 200
 #define ACTUATOR_FEEDBACK_MIN 600
 #define CR_SERVO_CCW 50
 #define CR_SERVO_CW 150
 #define CR_SERVO_STOP 100
-#define S_SERVO_RESET 0
-#define S_SERVO_LOAD 180
-#define S_SERVO_CENTER 90
+#define S_SERVO_OPEN 0
+#define S_SERVO_CLOSED 180
+#define S_SERVO_CENTER 140
 
 /* --- Prototypes --- */
 char forward(void);
@@ -69,14 +70,15 @@ long ping(void);
 char wait(void);
 char use_arm(int final);
 char help_rack(void);
+char use_rack(int final);
 
 /* --- Error Codes --- */
 const char ERROR_NONE = '0';
-const char ERROR_CLOSE = '1';
-const char ERROR_FAR = '2';
+const char ERROR_ACTION = '1';
+const char ERROR_CLOSE = '2';
 const char ERROR_LOAD = '3';
-const char ERROR_ACTION = '4';
-const char ERROR_BLOCKED = '5';
+const char ERROR_BLOCKED_RIGHT = '4';
+const char ERROR_BLOCKED_LEFT = '5';
 const char ERROR_ORBIT_RIGHT = '6';
 const char ERROR_ORBIT_LEFT = '7';
 const char ERROR_AVOID_RIGHT = '8';
@@ -98,6 +100,7 @@ const char EXTEND_ARM = 'E';
 const char USE_ARM = 'U';
 const char CENTER_ARM = 'C';
 const char TURN_AROUND = 'Z';
+const char RESET_RACK = 'V';
 
 /* --- Complex --- */
 const char HELP_RACK = 'H';
@@ -122,7 +125,7 @@ void setup() {
   load_servo.attach(LOAD_SERVO_PIN);
   left_servo.write(CR_SERVO_STOP);
   right_servo.write(CR_SERVO_STOP);
-  load_servo.write(S_SERVO_RESET);
+  load_servo.write(S_SERVO_OPEN);
   Serial.begin(BAUD);
 }
 
@@ -185,16 +188,19 @@ void loop() {
       error = avoid_left();
       break;
     case EXTEND_ARM:
-      error = use_arm(0);
+      error = use_arm(S_SERVO_OPEN);
       break;
     case USE_ARM:
-      error = use_arm(180);
+      error = use_arm(S_SERVO_CLOSED);
       break;
     case CENTER_ARM:
-      error = use_arm(90);
+      error = use_arm(S_SERVO_CENTER);
       break;
     case TURN_AROUND:
       error = right(25);
+      break;
+    case RESET_RACK:
+      error = use_rack(0);
       break;
     default:
       error = ERROR_ACTION;
@@ -219,22 +225,19 @@ char forward() {
   char temp;
   
   // Try
-  temp = use_arm(90);
   right_servo.write(CR_SERVO_CW);
   left_servo.write(CR_SERVO_CCW);
   delay(TIME_FORWARD);
   right_servo.write(CR_SERVO_STOP);
   left_servo.write(CR_SERVO_STOP);
-  temp = use_arm(0);
 
+  // Finish
   if (ping() > RANGE_GRAB) {
     error = ERROR_NONE;
   }
   else {
     error = ERROR_CLOSE; // Object Too Close
   }
-  
-  // Finish
   return error;
 }
 
@@ -244,15 +247,17 @@ char backward() {
   
   // Prepare
   char error = ERROR_NONE;
+  char temp;
   
-  // Reverse
+  // Try
   right_servo.write(CR_SERVO_CCW);
   left_servo.write(CR_SERVO_CW);
   delay(TIME_BACKWARD);
   right_servo.write(CR_SERVO_STOP);
   left_servo.write(CR_SERVO_STOP);
   
-  // Return Errors
+  // Cleanup
+  temp = use_arm(S_SERVO_CENTER);
   return error;
 }
 
@@ -261,17 +266,19 @@ char left(int val) {
   
   // Prepare
   char error;
+  char temp;
   
-  // Turn Left
+  // Do
   right_servo.write(CR_SERVO_CW);
   left_servo.write(CR_SERVO_CW);
   delay(val*TIME_LEFT);
   right_servo.write(CR_SERVO_STOP);
   left_servo.write(CR_SERVO_STOP);
   
-  // Return Errors
+  // Finish
+  temp = use_arm(S_SERVO_CENTER);
   if (ping() < RANGE_GRAB) {
-    error = ERROR_BLOCKED;
+    error = ERROR_BLOCKED_LEFT;
   }
   else {
     error = ERROR_NONE;
@@ -284,8 +291,9 @@ char right(int val) {
   
   // Prepare
   char error;
+  char temp;
     
-  // Turn Right
+  // Try
   right_servo.write(CR_SERVO_CCW);
   left_servo.write(CR_SERVO_CCW);
   delay(val*TIME_RIGHT);
@@ -293,8 +301,9 @@ char right(int val) {
   left_servo.write(CR_SERVO_STOP);
   
   // Return Errors
+  temp = use_arm(S_SERVO_CENTER);
   if (ping() < RANGE_GRAB) {
-    error = ERROR_BLOCKED;
+    error = ERROR_BLOCKED_RIGHT;
   }
   else {
     error = ERROR_NONE;
@@ -309,14 +318,17 @@ char grab() {
   char error;
   char temp;
 
-  temp = use_arm(0);
+  // Try
+  temp = use_arm(S_SERVO_OPEN);
   right_servo.write(CR_SERVO_CW);
   left_servo.write(CR_SERVO_CCW);
-  delay(TIME_FORWARD);
+  delay(TIME_GRAB);
   right_servo.write(CR_SERVO_STOP);
   left_servo.write(CR_SERVO_STOP);
-  temp = use_arm(180);
-  temp = use_arm(0);
+  temp = use_arm(S_SERVO_CLOSED);
+  
+  // Finish
+  temp = use_arm(S_SERVO_CENTER);
   if (ping() < RANGE_GRAB) {
     error = ERROR_LOAD;
   }
@@ -327,15 +339,21 @@ char grab() {
 }
 /* --- Help Rack --- */
 char help_rack() {
+  
+  // Prepare
   char temp;
-  temp = use_arm(180);
+  
+  // Try
+  temp = use_arm(S_SERVO_CLOSED);
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MAX);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MAX);             
-  delay(TIME_RACK_UP);
+  delay(TIME_RACK);
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MIN);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MIN);             
-  delay(TIME_RACK_DOWN);
-  temp = use_arm(0);
+  delay(TIME_RACK);
+  
+  // Finishe
+  temp = use_arm(S_SERVO_CENTER);
   return ERROR_NONE;
 }
 
@@ -346,43 +364,33 @@ char dump() {
   char error = ERROR_NONE;
   char temp;
   
-  // Turn Around
+  // Try
   temp = right(25);
-  
-  // Tuck Arm
   temp = use_arm(180);
-  
-  // Raise rack
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MAX);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MAX);             
-  delay(TIME_RACK_UP);
+  delay(TIME_RACK);
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_FULL);
-  analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_FULL);
-  delay(TIME_WAIT);
-  
-  // Move forward
+  analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_FULL);
+  delay(TIME_RACK_END);
   temp = forward();
-  
-  // Lower rack
   analogWrite(ACTUATOR1_PWM_PIN, ACTUATOR_MIN);
   analogWrite(ACTUATOR2_PWM_PIN, ACTUATOR_MIN);             
-  delay(TIME_RACK_DOWN);
+  delay(TIME_RACK);
   
-  // Extend arm
-  temp = use_arm(0);
-  
-  // Return Errors
+  // Finish
+  temp = use_arm(S_SERVO_CENTER);
   return error;
 }
 
 /* --- Avoid Right --- */
 char avoid_right() {
   
-    // Prepare
+  // Prepare
   char error;
-  char temp = use_arm(90);
+  char temp;
   
-  // Attempt to Avoid
+  // Try
   error = right(5);
   switch (error) {
     case ERROR_NONE:
@@ -390,24 +398,25 @@ char avoid_right() {
       temp = left(7);
       temp = forward();
       break;
-    case ERROR_BLOCKED:
+    case ERROR_BLOCKED_RIGHT:
       temp = left(5);
       error = ERROR_AVOID_RIGHT;
       break;
   }
   
-  // Return error
+  // Finish
+  temp = use_arm(S_SERVO_CENTER);
   return error;
 }
 
 /* --- Left Avoid --- */
 char avoid_left() {
   
-    // Prepare
+  // Prepare
   char error;
-  char temp = use_arm(90);
+  char temp;
   
-  // Attempt to Avoid
+  // Try
   error = left(5);
   switch (error) {
     case ERROR_NONE:
@@ -416,13 +425,14 @@ char avoid_left() {
       temp = forward();
       error = ERROR_NONE;
       break;
-    case ERROR_BLOCKED:
+    case ERROR_BLOCKED_LEFT:
       temp = right(5);
       error = ERROR_AVOID_LEFT;
       break;
   }
   
-  // Return error
+  // Finish
+  temp = use_arm(S_SERVO_CENTER);
   return error;
 }
 
@@ -433,62 +443,74 @@ char orbit_right() {
   char error;
   char temp;
   
-  // Turn right
+  // Try
   temp = right(10);
-  
-  // Try to Orbit
   switch (temp) {
     case ERROR_NONE:
       temp = forward();
       temp = left(15);
       error = ERROR_NONE;
       break;
-    case ERROR_CLOSE:
+    default:
       temp = left(10);
       error = ERROR_ORBIT_RIGHT;
       break;
   }
   
-  // Return Errors
+  // Finish
+  temp = use_arm(S_SERVO_CENTER);
   return error;
 }
 
 /* --- Left Orbit --- */
 char orbit_left() {
+  
+  // Prepare
   char error;
   char temp;
   
-  // Turn right
+  // Try
   temp = left(10);
-  
-  // Try to Move forward
   switch (temp) {
     case ERROR_NONE:
       temp = forward();
       temp = right(15);
       error = ERROR_NONE;
       break;
-    case ERROR_CLOSE:
+    default:
       temp = right(10);
       error = ERROR_ORBIT_LEFT;
       break;
   }
-  // Return Errors
+  
+  // Finish
+  temp = use_arm(S_SERVO_CENTER);
   return error;
 }
 
 /* --- Wait --- */
 char wait() {
+  
+  // Prepare
   char error = ERROR_NONE;
-  error = use_arm(90);
+  char temp;
+  
+  // Try
   delay(TIME_WAIT);
+  
+  // Finish
+  temp = use_arm(S_SERVO_CENTER);
   return error;
 }
 
 /* --- Ping --- */
 // Ping for distance to closest object
 long ping() {
+  
+  // Prepare
   long centimeters;
+  
+  // Try
   pinMode(ULTRASONIC_PIN, OUTPUT);
   digitalWrite(ULTRASONIC_PIN, LOW);
   delayMicroseconds(2);
@@ -497,6 +519,8 @@ long ping() {
   digitalWrite(ULTRASONIC_PIN, LOW);
   pinMode(ULTRASONIC_PIN, INPUT);
   centimeters = pulseIn(ULTRASONIC_PIN, HIGH) / 28 / 2;
+  
+  // Finish
   return centimeters;
 }
 
@@ -515,5 +539,22 @@ char use_arm(int final) {
       delay(TIME_DEGREE);
     }
   }
+  return ERROR_NONE;
+}
+
+/* --- Lower Rack --- */
+char use_rack(int final) {
+  
+  // Prepare
+  char error;
+  char temp;
+
+  // Try
+  temp = use_arm(S_SERVO_CLOSED);
+  analogWrite(ACTUATOR1_PWM_PIN, final);
+  analogWrite(ACTUATOR2_PWM_PIN, final);
+  delay(final*100);
+  
+  // Finish
   return ERROR_NONE;
 }

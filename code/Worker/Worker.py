@@ -20,8 +20,8 @@ import ast
 import subprocess
 
 # Setup
-ADDRESS_IN = ('10.42.0.1',50000) # 10.42.0.1
-ADDRESS_OUT = ('10.42.0.3',50001) # 10.42.0.3
+ADDRESS_IN = ('10.42.0.1',40000) # 10.42.0.1
+ADDRESS_OUT = ('10.42.0.3',40001) # 10.42.0.3
 BUFFER_SIZE = 4096
 QUEUE_MAX = 5
 BAUD = 9600
@@ -31,7 +31,7 @@ CAMERA_WIDTH = 320.0
 CAMERA_HEIGHT = 240.0
 CAMERA_CENTER = CAMERA_WIDTH/2.0
 CAMERA_LEVEL = CAMERA_HEIGHT/2.0
-CAMERA_THRESHOLD = CAMERA_WIDTH/8.0
+CAMERA_THRESHOLD = CAMERA_WIDTH/12.0
 SIZE_GRAB_RANGE = CAMERA_WIDTH/4.0
 SIZE_ZONE_RANGE = CAMERA_WIDTH/3.0
 SIZE_HOME_RANGE = CAMERA_WIDTH/3.0
@@ -50,11 +50,11 @@ MAX_RADIUS = 20
 ERROR_NONE = 0
 ERROR_PARSE = 254
 ERROR_CONNECTION = 255
-ERROR_CLOSE = 1
-ERROR_FAR = 2
+ERROR_ACTION = 1
+ERROR_CLOSE = 2
 ERROR_LOAD = 3
-ERROR_ACTION = 4
-ERROR_BLOCKED = 5
+ERROR_BLOCKED_RIGHT = 4
+ERROR_BLOCKED_LEFT = 5
 ERROR_ORBIT_RIGHT = 6
 ERROR_ORBIT_LEFT = 7
 ERROR_AVOID_RIGHT = 8
@@ -118,7 +118,7 @@ class Worker:
   def detect_yellow(self):
     objects = []
     x = 0
-    for cache in range(10):
+    for cache in range(30):
       (success, frame) = self.camera.read()
     raw = Image.fromarray(frame)
     BGR = raw.split()
@@ -158,7 +158,7 @@ class Worker:
         x = target[0]
         y = target[1]
         r = target[2]
-      if ((abs(CAMERA_CENTER - x) < CAMERA_THRESHOLD) and (abs(CAMERA_LEVEL - y) < CAMERA_THRESHOLD)):  
+      if (abs(CAMERA_CENTER - x) < CAMERA_THRESHOLD):  
         return True
       else:
         return False
@@ -242,79 +242,93 @@ class Worker:
     #1 There is an object in view...
     try:
       (size, offset) = max(objects)
-      #2 ...and I was just trying to turn...
-      if (self.error_number == 5):
-        #3 ...left.
-        for previous_action in ['T','S','R','Q']:
-          if (self.previous_action == previous_action):
-            message = 'Blocked After Turning Right -> Avoiding Left.'
+      #2 ...and it is small...
+      if (size < SIZE_GRAB_RANGE) and not (self.error_number == ERROR_LOAD):
+        #3 ...and I just tried avoiding to the left...
+        if (self.error_number == ERROR_AVOID_RIGHT):
+            message = 'Blocked After Avoiding Right -> Avoiding Left.'
             self.action = 'J'
-        #3 ...right.
-        for previous_action in ['K','L','M','N']:
-          if (self.previous_action == previous_action):
-            message = 'Blocked After Turning Left --> Avoiding Right.'
-            self.action = 'I'
-      #2 ...and I wasn't just trying to grab something...
-      elif not (self.error_number == 3):
-        #3 ...and it's to the right.
-        if (offset > CAMERA_THRESHOLD):
-          if (offset > 4*CAMERA_THRESHOLD):
-            message = '(Object in View -> 4 Right.'
-            self.action = 'T'
-          elif (offset > 3*CAMERA_THRESHOLD):
-            message = 'Object in View -> 3 Right.'
-            self.action = 'S'
-          elif (offset > 2*CAMERA_THRESHOLD):
-            message = 'Object in View -> 2 Right.'
-            self.action = 'R'
-          else:
-            message = 'Object in View -> 1 Right'
-            self.action = 'Q'
-        #3 ...and it's to the left.
-        elif (offset < -CAMERA_THRESHOLD):
-          if (offset < -4*CAMERA_THRESHOLD):
-            message = 'Object in View -> 4 Left'
-            self.action = 'N'
-          elif (offset < -3*CAMERA_THRESHOLD):
-            message = 'Object in View -> 3 Left'
-            self.action = 'M'
-          elif (offset < -2*CAMERA_THRESHOLD):
-            message = 'Object in View -> 2 Left'
-            self.action = 'L'
-          else:
-            message = 'Object in View -> 1 Left'
-            self.action = 'K'
-        #3 ...and it is straight ahead.
+        #3 ...and I just tried avoid to the right...
+        elif (self.error_number == ERROR_AVOID_LEFT):
+          message = 'Blocked After Avoiding Left --> Avoiding Right.'
+          self.action = 'I'
+        #3 ...and I just tried to turn right...
+        elif (self.error_number == ERROR_BLOCKED_LEFT):
+          message = 'Blocked After Turning Left --> Avoiding Right.'
+          self.action = 'I'
+        #3 ... and i just tried to turn left...
+        elif (self.error_number == ERROR_BLOCKED_LEFT):
+          message = 'Blocked After Turning Right --> Avoiding Left.'
+          self.action = 'J'
+        #3 ...and I just was blocked after moving...
+        elif (self.error_number == ERROR_CLOSE):
+          message = 'Blocked After Turning Right --> Avoiding Left.'
+          self.action = 'I'         
+        #3 ...and I didn't make bad movements...
         else:
-          #4 ...and it is too small to be close.
-          if (size < SIZE_GRAB_RANGE):
+          #4 ...and it's to the right...
+          if (offset > CAMERA_THRESHOLD):
+            if (offset > 4*CAMERA_THRESHOLD):
+              message = '(Object in View -> 4 Right.'
+              self.action = 'T'
+            elif (offset > 3*CAMERA_THRESHOLD):
+              message = 'Object in View -> 3 Right.'
+              self.action = 'S'
+            elif (offset > 2*CAMERA_THRESHOLD):
+              message = 'Object in View -> 2 Right.'
+              self.action = 'R'
+            else:
+              message = 'Object in View -> 1 Right'
+              self.action = 'Q'
+          #4 ...and it's to the left.
+          elif (offset < -CAMERA_THRESHOLD):
+            if (offset < -4*CAMERA_THRESHOLD):
+              message = 'Object in View -> 4 Left'
+              self.action = 'N'
+            elif (offset < -3*CAMERA_THRESHOLD):
+              message = 'Object in View -> 3 Left'
+              self.action = 'M'
+            elif (offset < -2*CAMERA_THRESHOLD):
+              message = 'Object in View -> 2 Left'
+              self.action = 'L'
+            else:
+              message = 'Object in View -> 1 Left'
+              self.action = 'K'
+          #4 ...and it's in front...
+          else:
             message = 'Too Small -> Out of Range'
             self.action = 'F'
-          #4 ...and it is big enough to be close.
-          else:
-            #5 ...and it is oriented.
-            if (self.is_oriented()):
+      #2 ...and it is large...
+      elif (size > SIZE_GRAB_RANGE):
+        #3 ...and I was just trying to grab something...
+        if (self.error_number == ERROR_LOAD):
+          message = 'Load Failed -> Reversing.'
+          self.action = 'B'
+        #3 ...and I was not just trying to grab something...
+        else:
+          #4 ...and it is oriented...
+          if True: #! (self.is_oriented())
               message = 'Large Enough -> In Range, Oriented -> Grab'
               self.action = 'G'
-              self.gathered += 1 
-            #5 ...but it isn't oriented...
+              self.gathered += 1
+          #4 ...but it is not oriented..
+          else:
+            #5 ...and I already tried to orbit left.
+            if (self.error_number == ERROR_ORBIT_LEFT):
+              message = 'Large Enough -> In Range, Not Oriented --> Orbiting Right.'
+              self.action = 'O'
+            #5 ...and I didn't just try to go around right.
+            elif (self.error_number == ERROR_ORBIT_RIGHT):
+              message = 'Large Enough -> In Range, Not Oriented & Blocked Right -> Orbiting Left.'
+              self.action = 'P'
+            #5 ... grab anyway.
             else:
-              #6  ... and I didn't just try to go around right.
-              if not (self.error_number == 6):
-                message = 'Large Enough -> In Range, Not Oriented --> Orbiting Right.'
-                self.action = 'O'
-              #6 ... and I didn't just try to go around left.
-              elif not (self.error_number == 7):
-                message = 'Large Enough -> In Range, Not Oriented & Blocked Right -> Orbiting Left.'
-                self.action = 'P'
-      #2 ...and I was already trying to grab something.
-      elif (self.error_number == 3):
-        message = 'Load Failed -> Reversing.'
-        self.action = 'B'
-      #2 ...but I don't know what to do.
+              message = 'In Range, Not Oriented -> Attempting to Orbing .'
+              self.action = 'O'  
+      #2
       else:
-        message = 'Confused -> Waitiing.'
         self.action = 'W'
+        message = 'Confused -> Waiting.'    
     #1 There are no objects in view.
     except ValueError:
       message = 'No Objects Detected -> Searching Right.'
@@ -362,17 +376,31 @@ class Worker:
             self.action = 'K'
         #3 ...and it is straight ahead.
         else:
-          #4 ...but it is blocked.
-          if ((self.error_number == 5) or (self.error_number == 1)):
+          #4 ...but it is blocked ahead.
+          if (self.error_number == ERROR_CLOSE):
             message = 'Object in Way -> Avoiding Right.'
             self.action = 'I'
-          elif (self.error_number == 8):
-            message = 'Object in Way, Failed to Avoid Right -> Avoiding Left.'
+          #4 ...but it is blocked after turning right.
+          elif (self.error_number == ERROR_AVOID_RIGHT):
+            message = 'Failed to Turn Right -> Avoiding Left.'
             self.action = 'J'
+          #4 ...but it is blocked after avoiding right.
+          elif (self.error_number == ERROR_AVOID_RIGHT):
+            message = 'Failed to Avoid Right -> Avoiding Left.'
+            self.action = 'J'
+          #4 ...but it is blocked to the left.
+          elif (self.error_number == ERROR_BLOCKED_LEFT):
+            message = 'Failed to Turn Left -> Avoiding Right.'
+            self.action = 'I'
+          #4 ...but it is blocked after avoiding right.
+          elif (self.error_number == ERROR_BLOCKED_RIGHT):
+            message = 'Failed to Avoid Left -> Avoiding Right.'
+            self.action = 'I'
+          #4 ...and isn't blocked.
           else:
             message = 'Zone Too Small -> Moving Forward.'
             self.action = 'F'
-      #2 ..and have reached the zone...
+      #2 ..and have reached the zone.
       else:  
         message = 'At Zone -> Dumping Bales.'
         self.action = 'D'
@@ -422,11 +450,11 @@ class Worker:
         #3 ...and it is straight ahead.
         else:
           #4 ...but it is blocked.
-          if ((self.error_number == 5) or (self.error_number == 1)):
-            message = 'Object in Way -> Avoiding Right.'
+          if ((self.error_number == ERROR_BLOCKED_LEFT) or (self.error_number == ERROR_CLOSE) or (self.error_number == ERROR_AVOID_LEFT)):
+            message = 'Object in Way Failed to go Left -> Avoiding Right.'
             self.action = 'I'
-          elif (self.error_number == 8):
-            message = 'Object in Way, Failed to Avoid Right -> Avoiding Left.'
+          elif ((self.error_number == ERROR_AVOID_RIGHT) or (self.error_number == ERROR_BLOCKED_RIGHT)):
+            message = 'Object in Way, Failed to go Right -> Avoiding Left.'
             self.action = 'J'
           else:
             message = 'Home Too Small -> Moving Forward.'
@@ -478,9 +506,6 @@ class Worker:
       self.error = 'NONE'
     elif (self.error_number == ERROR_CLOSE):
       self.error = 'TOO CLOSE'
-    elif (self.error_number == ERROR_FAR):
-      self.error = 'TOO FAR'
-      self.gathered -= 1
     elif (self.error_number == ERROR_LOAD):
       self.error = 'LOAD FAILED'
       self.gathered -= 1
@@ -488,8 +513,10 @@ class Worker:
       self.error = 'PARSE FAILED'
     elif (self.error_number == ERROR_ACTION):
       self.error = 'BAD ACTION'
-    elif (self.error_number == ERROR_BLOCKED):
-      self.error = 'BLOCKED AFTER TURN'
+    elif (self.error_number == ERROR_BLOCKED_RIGHT):
+      self.error = 'BLOCKED AFTER RIGHT TURN'
+    elif (self.error_number == ERROR_BLOCKED_LEFT):
+      self.error = 'BLOCKED AFTER LEFT TURN'
     elif (self.error_number == ERROR_ORBIT_RIGHT):
       self.error = 'ORBIT RIGHT FAILED'
     elif (self.error_number == ERROR_ORBIT_LEFT):
